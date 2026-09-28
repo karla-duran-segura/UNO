@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS JugadorPartida(
 	id_partida INT NOT NULL,
     id_jugador INT NOT NULL,
     orden INT NOT NULL,
-    cartar_restantes INT NULL,
+    cartas_restantes INT NULL,
     PRIMARY KEY (id_partida, id_jugador),
     FOREIGN KEY (id_partida) REFERENCES Partidas(id),
     FOREIGN KEY (id_jugador) REFERENCES Jugadores(id)
@@ -43,4 +43,4 @@ CREATE TABLE IF NOT EXISTS Movimientos(
     FOREIGN KEY (id_jugador) REFERENCES Jugadores(id)
 ) ENGINE=InnoDB;
 
-INSERT IGNORE INTO Jugadores (Nombre) VALUES ('Selyan'), ('Axel'), ('Nahima'), ('Karla');
+INSERT IGNORE INTO Jugadores (nombre) VALUES ('Selyan'), ('Axel'), ('Nahima'), ('Karla');
