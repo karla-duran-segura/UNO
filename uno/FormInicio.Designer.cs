@@ -28,12 +28,46 @@
         /// </summary>
         private void InitializeComponent()
         {
-            this.components = new System.ComponentModel.Container();
+            this.listBoxJugadores = new System.Windows.Forms.ListBox();
+            this.btnContinuar = new System.Windows.Forms.Button();
+            this.SuspendLayout();
+            // 
+            // listBoxJugadores
+            // 
+            this.listBoxJugadores.FormattingEnabled = true;
+            this.listBoxJugadores.ItemHeight = 25;
+            this.listBoxJugadores.Location = new System.Drawing.Point(82, 52);
+            this.listBoxJugadores.Name = "listBoxJugadores";
+            this.listBoxJugadores.Size = new System.Drawing.Size(410, 229);
+            this.listBoxJugadores.TabIndex = 0;
+            // 
+            // btnContinuar
+            // 
+            this.btnContinuar.Location = new System.Drawing.Point(276, 308);
+            this.btnContinuar.Name = "btnContinuar";
+            this.btnContinuar.Size = new System.Drawing.Size(241, 74);
+            this.btnContinuar.TabIndex = 1;
+            this.btnContinuar.Text = "Continuar";
+            this.btnContinuar.UseVisualStyleBackColor = true;
+            this.btnContinuar.Click += new System.EventHandler(this.btnContinuar_Click);
+            // 
+            // FormInicio
+            // 
+            this.AutoScaleDimensions = new System.Drawing.SizeF(12F, 25F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(800, 450);
-            this.Text = "Form1";
+            this.Controls.Add(this.btnContinuar);
+            this.Controls.Add(this.listBoxJugadores);
+            this.Name = "FormInicio";
+            this.Text = "UNO - Inicio";
+            this.Load += new System.EventHandler(this.FormInicio_Load);
+            this.ResumeLayout(false);
+
         }
 
         #endregion
+
+        private System.Windows.Forms.ListBox listBoxJugadores;
+        private System.Windows.Forms.Button btnContinuar;
     }
 }

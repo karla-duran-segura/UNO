@@ -16,5 +16,21 @@ namespace uno
         {
             InitializeComponent();
         }
+
+        private void btnContinuar_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void FormInicio_Load(object sender, EventArgs e)
+        {
+            BaseDatos baseDatos = new BaseDatos();
+            List<string> jugadores = baseDatos.ObtenerJugadores();
+
+            foreach (string jugador in jugadores)
+            {
+                listBoxJugadores.Items.Add(jugador);
+            }
+        }
     }
 }
