@@ -14,7 +14,7 @@ namespace uno
             jugadores.Add("Axel");
             jugadores.Add("Selyan");
             jugadores.Add("Karla");
-            jugadores.Add("Jugador 4");
+            jugadores.Add("Nahima");
             return jugadores;
         }
     }

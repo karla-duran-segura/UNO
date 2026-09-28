@@ -38,6 +38,7 @@
             this.listBoxJugadores.ItemHeight = 25;
             this.listBoxJugadores.Location = new System.Drawing.Point(82, 52);
             this.listBoxJugadores.Name = "listBoxJugadores";
+            this.listBoxJugadores.SelectionMode = System.Windows.Forms.SelectionMode.MultiExtended;
             this.listBoxJugadores.Size = new System.Drawing.Size(410, 229);
             this.listBoxJugadores.TabIndex = 0;
             // 

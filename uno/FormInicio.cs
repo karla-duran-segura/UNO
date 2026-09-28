@@ -19,7 +19,19 @@ namespace uno
 
         private void btnContinuar_Click(object sender, EventArgs e)
         {
-
+            if (listBoxJugadores.SelectedItems.Count == 0)
+            {
+                MessageBox.Show("Selecciona al menos un jugador para continuar.");
+            }
+            else
+            {
+                string nombresSeleccionados = "";
+                foreach (string jugador in listBoxJugadores.SelectedItems)
+                {
+                    nombresSeleccionados = nombresSeleccionados + jugador + "\n";
+                }
+                MessageBox.Show("Jugadores seleccionados:\n" + nombresSeleccionados);
+            }
         }
 
         private void FormInicio_Load(object sender, EventArgs e)
