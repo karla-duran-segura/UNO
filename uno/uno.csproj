@@ -93,6 +93,7 @@
     <Compile Include="Carta.cs" />
     <Compile Include="ImagenesCartas.cs" />
     <Compile Include="BaseDatos.cs" />
+    <Compile Include="Juego.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
