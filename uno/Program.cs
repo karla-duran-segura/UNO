@@ -3,14 +3,18 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 
 namespace uno
 {
     internal class Program
     {
+        [STAThread]
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello, World!");
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.Run(new FormInicio());
         }
     }
 }
