@@ -95,6 +95,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Carta.cs" />
+    <Compile Include="Tema.cs" />
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>
