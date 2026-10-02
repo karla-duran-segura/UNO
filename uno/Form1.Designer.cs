@@ -16,12 +16,15 @@
         private void InitializeComponent()
         {
             this.logoUno = new uno.LogoUno();
+            this.btnSalir = new uno.BotonPastel();
             this.lblTitulo = new System.Windows.Forms.Label();
             this.lblSubtitulo = new System.Windows.Forms.Label();
             this.lblDatos = new System.Windows.Forms.Label();
             this.panelJugadores = new uno.PanelVidrio();
             this.lblElige = new System.Windows.Forms.Label();
             this.lblIndicacion = new System.Windows.Forms.Label();
+            this.lblContador = new System.Windows.Forms.Label();
+            this.btnComenzar = new uno.BotonPastel();
             this.panelJugadores.SuspendLayout();
             this.SuspendLayout();
 
@@ -31,6 +34,17 @@
             this.logoUno.Size = new System.Drawing.Size(470, 400);
             this.logoUno.TabIndex = 0;
             this.logoUno.TabStop = false;
+
+            this.btnSalir.BackColor = System.Drawing.Color.Transparent;
+            this.btnSalir.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.btnSalir.Font = new System.Drawing.Font("Segoe UI Semibold", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.btnSalir.Location = new System.Drawing.Point(64, 622);
+            this.btnSalir.Name = "btnSalir";
+            this.btnSalir.Principal = false;
+            this.btnSalir.Size = new System.Drawing.Size(120, 40);
+            this.btnSalir.TabIndex = 5;
+            this.btnSalir.Text = "Salir";
+            this.btnSalir.Click += new System.EventHandler(this.btnSalir_Click);
 
             this.lblTitulo.BackColor = System.Drawing.Color.Transparent;
             this.lblTitulo.Font = new System.Drawing.Font("Segoe UI Black", 30F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
@@ -63,6 +77,8 @@
             this.lblDatos.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
 
             this.panelJugadores.BackColor = System.Drawing.Color.Transparent;
+            this.panelJugadores.Controls.Add(this.lblContador);
+            this.panelJugadores.Controls.Add(this.btnComenzar);
             this.panelJugadores.Controls.Add(this.lblElige);
             this.panelJugadores.Controls.Add(this.lblIndicacion);
             this.panelJugadores.Location = new System.Drawing.Point(540, 20);
@@ -89,11 +105,32 @@
             this.lblIndicacion.TabIndex = 1;
             this.lblIndicacion.Text = "Toca a 4 jugadores. El orden en que los elijas será el orden de los turnos.";
 
+            this.lblContador.BackColor = System.Drawing.Color.Transparent;
+            this.lblContador.Font = new System.Drawing.Font("Segoe UI Semibold", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.lblContador.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(138)))), ((int)(((byte)(132)))), ((int)(((byte)(163)))));
+            this.lblContador.Location = new System.Drawing.Point(44, 502);
+            this.lblContador.Name = "lblContador";
+            this.lblContador.Size = new System.Drawing.Size(432, 24);
+            this.lblContador.TabIndex = 4;
+            this.lblContador.Text = "Elige a 4 jugadores";
+            this.lblContador.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+
+            this.btnComenzar.BackColor = System.Drawing.Color.Transparent;
+            this.btnComenzar.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.btnComenzar.Enabled = false;
+            this.btnComenzar.Font = new System.Drawing.Font("Segoe UI Semibold", 14F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.btnComenzar.Location = new System.Drawing.Point(44, 534);
+            this.btnComenzar.Name = "btnComenzar";
+            this.btnComenzar.Size = new System.Drawing.Size(432, 62);
+            this.btnComenzar.TabIndex = 5;
+            this.btnComenzar.Text = "Comenzar partida  →";
+
             this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(246)))), ((int)(((byte)(238)))), ((int)(((byte)(255)))));
             this.ClientSize = new System.Drawing.Size(1100, 680);
             this.Controls.Add(this.panelJugadores);
+            this.Controls.Add(this.btnSalir);
             this.Controls.Add(this.lblDatos);
             this.Controls.Add(this.lblSubtitulo);
             this.Controls.Add(this.lblTitulo);
@@ -109,13 +146,15 @@
 
         }
 
-
         private uno.LogoUno logoUno;
+        private uno.BotonPastel btnSalir;
         private System.Windows.Forms.Label lblTitulo;
         private System.Windows.Forms.Label lblSubtitulo;
         private System.Windows.Forms.Label lblDatos;
         private uno.PanelVidrio panelJugadores;
         private System.Windows.Forms.Label lblElige;
         private System.Windows.Forms.Label lblIndicacion;
+        private System.Windows.Forms.Label lblContador;
+        private uno.BotonPastel btnComenzar;
     }
 }

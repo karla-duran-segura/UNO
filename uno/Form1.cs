@@ -31,9 +31,9 @@ namespace uno
                     Positions = new[] { 0f, 0.5f, 1f },
                     Colors = new[]
                     {
-                        Color.FromArgb(240, 230, 255),   
-                        Color.FromArgb(255, 232, 242),   
-                        Color.FromArgb(255, 241, 220)   
+                        Color.FromArgb(240, 230, 255),   // lavanda
+                        Color.FromArgb(255, 232, 242),   // rosa
+                        Color.FromArgb(255, 241, 220)    // durazno
                     }
                 };
                 g.FillRectangle(fondo, rect);
@@ -50,6 +50,11 @@ namespace uno
         {
             using (var b = new SolidBrush(color))
                 g.FillEllipse(b, x, y, d, d);
+        }
+
+        private void btnSalir_Click(object sender, EventArgs e)
+        {
+            Close();
         }
     }
 }
