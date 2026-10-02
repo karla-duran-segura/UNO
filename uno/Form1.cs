@@ -9,8 +9,11 @@ namespace uno
 {
     public partial class FormInicio : Form
     {
+        private const int Requeridos = 4;
+
         private readonly BaseDatos baseDatos = new BaseDatos();
         private readonly List<TarjetaJugador> tarjetas = new List<TarjetaJugador>();
+        private readonly List<TarjetaJugador> elegidas = new List<TarjetaJugador>();   // en orden de turno
 
         public FormInicio()
         {
@@ -61,7 +64,6 @@ namespace uno
                 g.FillEllipse(b, x, y, d, d);
         }
 
-   
         private void btnSalir_Click(object sender, EventArgs e)
         {
             Close();
@@ -79,7 +81,7 @@ namespace uno
             }
             catch (Exception ex)
             {
-                // Por ahora solo un aviso; en la etapa 8 se cambia por un panel con reintentar
+                // Por ahora solo un aviso ya que en la etapa 8 se cambia por un panel con reintentar
                 MessageBox.Show(
                     "No se pudo conectar con la base de datos.\n\n" +
                     "Revisa que MySQL esté encendido y que ya corriste Database/uno_db.sql.\n\n" +
@@ -88,15 +90,16 @@ namespace uno
                 return;
             }
 
-            // Quitar tarjetas anteriores sirve también cuando se vuelva a cargar
+            // Quitar tarjetas anteriores 
             foreach (var t in tarjetas)
             {
                 panelJugadores.Controls.Remove(t);
                 t.Dispose();
             }
             tarjetas.Clear();
+            elegidas.Clear();
 
-            if (jugadores.Count == 0) return;
+            if (jugadores.Count == 0) { ActualizarSeleccion(); return; }
 
             // Medidas relativas al diseño del panel 
             int x = lblElige.Left;
@@ -122,10 +125,13 @@ namespace uno
                     Size = new Size(ancho, alto),
                     TabIndex = 10 + i
                 };
+                tarjeta.Click += Tarjeta_Click;
 
                 tarjetas.Add(tarjeta);
                 panelJugadores.Controls.Add(tarjeta);
             }
+
+            ActualizarSeleccion();
         }
 
         private static string TextoRecord(EstadisticaJugador est)
@@ -136,6 +142,49 @@ namespace uno
             string ganadas = est.partidas_ganadas + (est.partidas_ganadas == 1 ? " ganada" : " ganadas");
             string perdidas = est.partidas_perdidas + (est.partidas_perdidas == 1 ? " perdida" : " perdidas");
             return ganadas + "  ·  " + perdidas;
+        }
+
+        private void Tarjeta_Click(object sender, EventArgs e)
+        {
+            var tarjeta = (TarjetaJugador)sender;
+
+            if (elegidas.Contains(tarjeta))
+                elegidas.Remove(tarjeta);              // la quita y las demás se renumeran
+            else if (elegidas.Count < Requeridos)
+                elegidas.Add(tarjeta);                 
+
+            ActualizarSeleccion();
+        }
+
+        private void ActualizarSeleccion()
+        {
+            bool completo = elegidas.Count == Requeridos;
+
+            foreach (var t in tarjetas)
+            {
+                t.Turno = elegidas.IndexOf(t) + 1;  
+                t.Enabled = !completo || t.Elegida;    // con 4 elegidos, las demás se bloquean
+            }
+
+            btnComenzar.Enabled = completo;
+
+            if (completo)
+            {
+                lblContador.Text = "¡Listo! Ya están los 4 jugadores";
+                lblContador.ForeColor = Tema.Exito;
+            }
+            else if (elegidas.Count == 0)
+            {
+                lblContador.Text = "Elige a 4 jugadores";
+                lblContador.ForeColor = Tema.Suave;
+            }
+            else
+            {
+                int faltan = Requeridos - elegidas.Count;
+                lblContador.Text = elegidas.Count + " de " + Requeridos + "  ·  " +
+                                   (faltan == 1 ? "falta 1" : "faltan " + faltan);
+                lblContador.ForeColor = Tema.Suave;
+            }
         }
     }
 }
