@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
-using MySql.Data.MySqlClient;
+using System.Net.Http;
+using System.Text;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace uno
 {
@@ -30,176 +33,138 @@ namespace uno
 
 	public class BaseDatos
 	{
-		private readonly string _cadenaConexion = "Server=localhost;Port=3306;Database=uno;Uid=uno_user;Pwd=uno1234;";
-		
-		private MySqlConnection Abrir()
+		private const string UrlBase = "http://127.0.0.1:8000";
+ 
+		private static readonly HttpClient http = new HttpClient
 		{
-			var conn = new MySqlConnection(_cadenaConexion);
-			conn.Open();
-			return conn;
+			BaseAddress = new Uri(UrlBase),
+			Timeout = TimeSpan.FromSeconds(10)
+		};
+ 
+		// La API pide numero_turno, así que lo llevamos aquí: id_partida -> último turno
+		private readonly Dictionary<int, int> turnos = new Dictionary<int, int>();
+ 
+		private static string Leer(HttpResponseMessage r)
+		{
+			string texto = r.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+			if (!r.IsSuccessStatusCode)
+				throw new Exception("Error de la API (" + (int)r.StatusCode + "): " + texto);
+			return texto;
 		}
-
-		// Comprueba que el servidor y la base existen. Devuelve true si todo esta bien
+ 
+		private static string Get(string ruta)
+		{
+			return Leer(http.GetAsync(ruta).GetAwaiter().GetResult());
+		}
+ 
+		private static string Enviar(HttpMethod metodo, string ruta, object cuerpo)
+		{
+			var req = new HttpRequestMessage(metodo, ruta)
+			{
+				Content = new StringContent(JsonConvert.SerializeObject(cuerpo), Encoding.UTF8, "application/json")
+			};
+			return Leer(http.SendAsync(req).GetAwaiter().GetResult());
+		}
+ 
+ 
+		// Comprueba que la API (y por tanto la base) responde
 		public bool ProbarConexion()
 		{
 			try
 			{
-				using (var conn = Abrir()) { return true; }
+				Get("/");
+				return true;
 			}
-			catch (MySqlException)
+			catch (Exception)
 			{
 				return false;
 			}
 		}
-
+ 
 		public List<JugadorBD> ObtenerJugadores()
 		{
 			var lista = new List<JugadorBD>();
-			using (var conn = Abrir())
-			using (var cmd = new MySqlCommand("SELECT id, nombre FROM Jugadores ORDER BY id;", conn))
-			using (var lector = cmd.ExecuteReader())
-			{
-				while (lector.Read())
-					lista.Add(new JugadorBD { id = lector.GetInt32(0), nombre = lector.GetString(1) });
-			}
+			foreach (JObject fila in JArray.Parse(Get("/jugadores")))
+				lista.Add(new JugadorBD { id = (int)fila["id"], nombre = (string)fila["nombre"] });
 			return lista;
 		}
-
+ 
 		// Recibe los ids de los jugadores en su orden de turno. Devuelve el id de la partida
 		public int CrearPartida(List<int> idsJugadores)
 		{
-			using (var conn = Abrir())
-			using (var tx = conn.BeginTransaction())
-			{
-				int id_partida;
-				using (var cmd = new MySqlCommand("INSERT INTO Partidas (fecha_ini) VALUES (@fecha);", conn, tx))
-				{
-					cmd.Parameters.AddWithValue("@fecha", DateTime.Now);
-					cmd.ExecuteNonQuery();
-					id_partida = Convert.ToInt32(cmd.LastInsertedId);
-				}
-				for (int i = 0; i < idsJugadores.Count; i++)
-				{
-					using (var cmdJ = new MySqlCommand("INSERT INTO JugadorPartida (id_partida, id_jugador, orden) VALUES (@p, @j, @o);", conn, tx))
-					{
-						cmdJ.Parameters.AddWithValue("@p", id_partida);
-						cmdJ.Parameters.AddWithValue("@j", idsJugadores[i]);
-						cmdJ.Parameters.AddWithValue("@o", i + 1);
-						cmdJ.ExecuteNonQuery();
-					}
-				}
-				tx.Commit(); // confirma los INSERT anteriores; sin esto no se guarda nada
-				return id_partida;
-			}
+			string json = Enviar(HttpMethod.Post, "/partidas", new { jugadores = idsJugadores });
+			int id_partida = (int)JObject.Parse(json)["id_partida"];
+			turnos[id_partida] = 0;
+			return id_partida;
 		}
-
+ 
 		// Tipo: "JUGAR", "ROBAR", "UNO", o "CASTIGO_UNO"
-		public void RegistrarMovimiento(int id_partida, int id_jugador, string tipo, string carta=null, string color_elegido = null)
+		public void RegistrarMovimiento(int id_partida, int id_jugador, string tipo, string carta = null, string color_elegido = null)
 		{
-			using (var conn = Abrir())
+			int turno;
+			turnos.TryGetValue(id_partida, out turno);
+			turno++;
+			turnos[id_partida] = turno;
+ 
+			Enviar(HttpMethod.Post, "/movimientos", new
 			{
-				int turno;
-				using (var cmdT = new MySqlCommand("SELECT COUNT(*) + 1 FROM Movimientos WHERE id_partida = @p;", conn))
-				{
-					cmdT.Parameters.AddWithValue("@p", id_partida);
-					turno = Convert.ToInt32(cmdT.ExecuteScalar());
-				}
-				using (var cmd = new MySqlCommand(@"INSERT INTO Movimientos (id_partida, id_jugador, numero_turno, tipo, carta, color_elegido, fecha) VALUES (@p, @j, @turno, @tipo, @carta, @color, @fecha);", conn)) 
-				{
-					cmd.Parameters.AddWithValue("@p", id_partida);
-					cmd.Parameters.AddWithValue("@j", id_jugador);
-					cmd.Parameters.AddWithValue("@turno", turno);
-					cmd.Parameters.AddWithValue("@tipo", tipo);
-					cmd.Parameters.AddWithValue("@carta", (object)carta ?? DBNull.Value);
-					cmd.Parameters.AddWithValue("@color", (object)color_elegido ?? DBNull.Value);
-					cmd.Parameters.AddWithValue("@fecha", DateTime.Now);
-					cmd.ExecuteNonQuery();
-				}
-			}
+				id_partida = id_partida,
+				id_jugador = id_jugador,
+				numero_turno = turno,
+				tipo = tipo,
+				carta = carta,
+				color_elegido = color_elegido
+			});
 		}
-
-		// Cartas Restantes: id de jugador -> cartas que le quedaron al terminar
+ 
+		// cartasRestantes: id de jugador -> cartas que le quedaron al terminar
 		public void RegistrarResultado(int id_partida, int id_ganador, Dictionary<int, int> cartasRestantes)
 		{
-			using (var conn = Abrir())
-			using (var tx = conn.BeginTransaction())
-			{
-				using (var cmd = new MySqlCommand("UPDATE Partidas SET fecha_fin = @fecha, id_ganador = @g WHERE id = @p;", conn, tx))
-				{
-					cmd.Parameters.AddWithValue("@fecha", DateTime.Now);
-					cmd.Parameters.AddWithValue("@g", id_ganador);
-					cmd.Parameters.AddWithValue("@p", id_partida);
-					cmd.ExecuteNonQuery();
-				}
-				foreach (var par in cartasRestantes)
-				{
-					using (var cmdJ = new MySqlCommand("UPDATE JugadorPartida SET cartas_restantes = @c WHERE id_partida = @p AND id_jugador = @j;", conn, tx))
-					{
-						cmdJ.Parameters.AddWithValue("@c", par.Value);
-						cmdJ.Parameters.AddWithValue("@p", id_partida);
-						cmdJ.Parameters.AddWithValue("@j", par.Key);
-						cmdJ.ExecuteNonQuery();
-					}
-				}
-				tx.Commit();
-			}
+			var cartas = new List<object>();
+			foreach (var par in cartasRestantes)
+				cartas.Add(new { id_jugador = par.Key, cartas_restantes = par.Value });
+ 
+			Enviar(HttpMethod.Put, "/partidas/" + id_partida + "/terminar",
+				new { id_ganador = id_ganador, cartas = cartas });
 		}
-
+ 
 		public List<HistorialPartida> ObtenerHistorial()
 		{
 			var lista = new List<HistorialPartida>();
-			using (var conn = Abrir())
-			using (var cmd = new MySqlCommand(@"
-				SELECT p.id, p.fecha_ini, p.fecha_fin, j.nombre, (SELECT COUNT(*) FROM Movimientos m WHERE m.id_partida = p.id) 
-				FROM Partidas p 
-				LEFT JOIN Jugadores j ON j.id = p.id_ganador 
-				ORDER BY p.id DESC;", conn))
-			using (var lector = cmd.ExecuteReader())
+			foreach (JObject fila in JArray.Parse(Get("/partidas")))
 			{
-				while (lector.Read())
+				int id = (int)fila["id"];
+				// /partidas no trae el total de movimientos, se cuenta con otra consulta
+				int totalMovs = JArray.Parse(Get("/partidas/" + id + "/movimientos")).Count;
+ 
+				lista.Add(new HistorialPartida
 				{
-					lista.Add(new HistorialPartida
-					{
-						id_partida = lector.GetInt32(0),
-						fecha_ini = lector.GetDateTime(1),
-						fecha_fin = lector.IsDBNull(2) ? (DateTime?)null : lector.GetDateTime(2),
-						nombre_ganador = lector.IsDBNull(3) ? null : lector.GetString(3),
-						total_movs = Convert.ToInt32(lector.GetValue(4))
-					});
-				}
+					id_partida = id,
+					fecha_ini = (DateTime)fila["fecha_ini"],
+					fecha_fin = fila["fecha_fin"].Type == JTokenType.Null ? (DateTime?)null : (DateTime)fila["fecha_fin"],
+					nombre_ganador = fila["ganador"].Type == JTokenType.Null ? null : (string)fila["ganador"],
+					total_movs = totalMovs
+				});
 			}
 			return lista;
 		}
-
+ 
 		public List<EstadisticaJugador> ObtenerEstadisticasPorJugador()
 		{
 			var lista = new List<EstadisticaJugador>();
-			using (var conn = Abrir())
-			using (var cmd = new MySqlCommand(@"
-				SELECT
-					j.nombre,
-					COUNT(jp.id_partida) AS PartidasJugadas,
-					SUM(CASE WHEN p.id_ganador = j.id THEN 1 ELSE 0 END) AS PartidasGanadas,
-					SUM(CASE WHEN p.id_ganador IS NOT NULL AND p.id_ganador <> j.id THEN 1 ELSE 0 END) AS PartidasPerdidas
-				FROM Jugadores j
-				LEFT JOIN JugadorPartida jp ON jp.id_jugador = j.id
-				LEFT JOIN Partidas p ON p.id = jp.id_partida
-				GROUP BY j.id, j.nombre;", conn))
-			using (var lector = cmd.ExecuteReader())
+			foreach (JObject fila in JArray.Parse(Get("/historial")))
 			{
-				while (lector.Read())
+				int ganadas = (int)fila["ganadas"];
+				int perdidas = (int)fila["perdidas"];
+				lista.Add(new EstadisticaJugador
 				{
-					lista.Add(new EstadisticaJugador
-					{
-						nombre = lector.GetString(0),
-						partidas_jugadas = Convert.ToInt32(lector.GetValue(1)),
-						partidas_ganadas = Convert.ToInt32(lector.GetValue(2)),
-						partidas_perdidas = Convert.ToInt32(lector.GetValue(3))
-					});
-				}
+					nombre = (string)fila["nombre"],
+					partidas_ganadas = ganadas,
+					partidas_perdidas = perdidas,
+					partidas_jugadas = ganadas + perdidas
+				});
 			}
 			return lista;
 		}
 	}
-
 }
