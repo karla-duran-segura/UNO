@@ -95,6 +95,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Carta.cs" />
+    <Compile Include="LogoUno.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="PanelVidrio.cs">
       <SubType>Component</SubType>
     </Compile>
