@@ -42,6 +42,7 @@ namespace uno
         public Carta CartaSuperior { get { return descarte[descarte.Count - 1]; } }
         public string ColorActivo { get; private set; }
         public JugadorUno JugadorActual { get { return Jugadores[indiceActual]; } }
+        public JugadorUno Repartidor { get { return Jugadores[repartidor]; } }
         public int Direccion { get { return direccion; } }
         public int NumeroRonda { get { return ronda; } }
         public bool RondaTerminada { get; private set; }
