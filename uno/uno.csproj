@@ -101,6 +101,9 @@
     <Compile Include="BotonPastel.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="FormJuego.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="TarjetaJugador.cs">
       <SubType>Component</SubType>
     </Compile>
