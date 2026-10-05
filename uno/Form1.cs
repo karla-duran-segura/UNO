@@ -13,7 +13,12 @@ namespace uno
 
         private readonly BaseDatos baseDatos = new BaseDatos();
         private readonly List<TarjetaJugador> tarjetas = new List<TarjetaJugador>();
-        private readonly List<TarjetaJugador> elegidas = new List<TarjetaJugador>();   // en orden de turno
+        private readonly List<TarjetaJugador> elegidas = new List<TarjetaJugador>();  
+
+        // Aviso de error de conexión 
+        private Label lblErrorTitulo;
+        private Label lblErrorDetalle;
+        private BotonPastel btnReintentar;
 
         public FormInicio()
         {
@@ -21,6 +26,7 @@ namespace uno
             DoubleBuffered = true;
             SetStyle(ControlStyles.ResizeRedraw, true);
             Load += FormInicio_Load;
+            btnComenzar.Click += btnComenzar_Click;
         }
 
         private void FormInicio_Load(object sender, EventArgs e)
@@ -69,6 +75,53 @@ namespace uno
             Close();
         }
 
+        private void btnComenzar_Click(object sender, EventArgs e)
+        {
+            ComenzarPartida();
+        }
+
+        // Enter también comienza la partida 
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == Keys.Enter && btnComenzar.Enabled)
+            {
+                ComenzarPartida();
+                return true;
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private void ComenzarPartida()
+        {
+            if (elegidas.Count != Requeridos) return;
+
+            // Nombres en el orden en que se eligieron 
+            var nombres = elegidas.Select(t => t.Jugador.nombre).ToList();
+
+            Juego juego;
+            try
+            {
+                juego = new Juego(nombres);
+            }
+            catch (ArgumentException ex)
+            {
+                MessageBox.Show("No se pudo crear la partida.\n\n" + ex.Message,
+                    "UNO", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string orden = string.Join("\n", nombres.Select((n, i) => (i + 1) + ". " + n));
+            string color = juego.ColorActivo ?? "(se elige al empezar)";
+
+            MessageBox.Show(
+                 "Orden de turnos:\n" + orden + "\n\n" +
+                 "Reparte: " + juego.Repartidor.Nombre + "\n" +
+                 "Empieza: " + juego.JugadorActual.Nombre + "\n\n" +
+                 "Carta inicial: " + juego.CartaSuperior.Texto() + "\n" +
+                 "Color activo: " + color,
+                 "Partida lista (prueba)", MessageBoxButtons.OK, MessageBoxIcon.Information); ;
+        }
+
         private void CargarJugadores()
         {
             List<JugadorBD> jugadores;
@@ -81,27 +134,17 @@ namespace uno
             }
             catch (Exception ex)
             {
-                // Por ahora solo un aviso ya que en la etapa 8 se cambia por un panel con reintentar
-                MessageBox.Show(
-                    "No se pudo conectar con la base de datos.\n\n" +
-                    "Revisa que MySQL esté encendido y que ya corriste Database/uno_db.sql.\n\n" +
-                    "Detalle: " + ex.Message,
-                    "UNO", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                LimpiarTarjetas();
+                ActualizarSeleccion();
+                MostrarError(ex.Message);
                 return;
             }
 
-            // Quitar tarjetas anteriores 
-            foreach (var t in tarjetas)
-            {
-                panelJugadores.Controls.Remove(t);
-                t.Dispose();
-            }
-            tarjetas.Clear();
-            elegidas.Clear();
+            OcultarError();
+            LimpiarTarjetas();
 
             if (jugadores.Count == 0) { ActualizarSeleccion(); return; }
 
-            // Medidas relativas al diseño del panel 
             int x = lblElige.Left;
             int ancho = lblElige.Width;
             int yInicio = lblIndicacion.Bottom + (int)(lblElige.Height * 0.25);
@@ -133,6 +176,16 @@ namespace uno
 
             ActualizarSeleccion();
         }
+        private void LimpiarTarjetas()
+        {
+            foreach (var t in tarjetas)
+            {
+                panelJugadores.Controls.Remove(t);
+                t.Dispose();
+            }
+            tarjetas.Clear();
+            elegidas.Clear();
+        }
 
         private static string TextoRecord(EstadisticaJugador est)
         {
@@ -144,12 +197,99 @@ namespace uno
             return ganadas + "  ·  " + perdidas;
         }
 
+        private void CrearControlesError()
+        {
+            if (lblErrorTitulo != null) return;
+
+            lblErrorTitulo = new Label
+            {
+                AutoSize = false,
+                BackColor = Color.Transparent,
+                Font = new Font("Segoe UI Semibold", 16F, FontStyle.Regular, GraphicsUnit.Point),
+                ForeColor = Tema.Texto,
+                Text = "No hay conexión con el juego",
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            lblErrorDetalle = new Label
+            {
+                AutoSize = false,
+                BackColor = Color.Transparent,
+                Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point),
+                ForeColor = Tema.Suave,
+                TextAlign = ContentAlignment.TopLeft
+            };
+
+            btnReintentar = new BotonPastel
+            {
+                Text = "Reintentar",
+                Font = new Font("Segoe UI Semibold", 12F, FontStyle.Regular, GraphicsUnit.Point),
+                TabIndex = 20
+            };
+            btnReintentar.Click += btnReintentar_Click;
+
+            panelJugadores.Controls.Add(lblErrorTitulo);
+            panelJugadores.Controls.Add(lblErrorDetalle);
+            panelJugadores.Controls.Add(btnReintentar);
+        }
+
+        private void MostrarError(string detalle)
+        {
+            CrearControlesError();
+
+            int unidad = lblElige.Height;
+            int x = lblElige.Left;
+            int ancho = lblElige.Width;
+            int y = lblIndicacion.Bottom + unidad;
+
+            lblErrorTitulo.SetBounds(x, y, ancho, (int)(unidad * 1.2));
+            y = lblErrorTitulo.Bottom + (int)(unidad * 0.3);
+
+            lblErrorDetalle.Text =
+                "No se pudo cargar la lista de jugadores.\r\n\r\n" +
+                "Revisa que MySQL esté encendido y que la API esté corriendo.\r\n\r\n" +
+                "Detalle: " + Recortar(detalle, 140);
+            lblErrorDetalle.SetBounds(x, y, ancho, (int)(unidad * 5.5));
+
+            btnReintentar.SetBounds(x, lblErrorDetalle.Bottom + (int)(unidad * 0.4), ancho, (int)(unidad * 1.3));
+
+            lblErrorTitulo.Visible = true;
+            lblErrorDetalle.Visible = true;
+            btnReintentar.Visible = true;
+            lblContador.Visible = false;
+        }
+
+        private void OcultarError()
+        {
+            if (lblErrorTitulo != null)
+            {
+                lblErrorTitulo.Visible = false;
+                lblErrorDetalle.Visible = false;
+                btnReintentar.Visible = false;
+            }
+            lblContador.Visible = true;
+        }
+
+        private void btnReintentar_Click(object sender, EventArgs e)
+        {
+            UseWaitCursor = true;
+            try { CargarJugadores(); }
+            finally { UseWaitCursor = false; }
+        }
+
+        private static string Recortar(string texto, int max)
+        {
+            if (string.IsNullOrEmpty(texto)) return "(sin detalle)";
+            texto = texto.Replace("\r", " ").Replace("\n", " ");
+            return texto.Length <= max ? texto : texto.Substring(0, max) + "…";
+        }
+
         private void Tarjeta_Click(object sender, EventArgs e)
         {
             var tarjeta = (TarjetaJugador)sender;
 
             if (elegidas.Contains(tarjeta))
-                elegidas.Remove(tarjeta);              // la quita y las demás se renumeran
+                elegidas.Remove(tarjeta);              
             else if (elegidas.Count < Requeridos)
                 elegidas.Add(tarjeta);                 
 
@@ -162,7 +302,7 @@ namespace uno
 
             foreach (var t in tarjetas)
             {
-                t.Turno = elegidas.IndexOf(t) + 1;  
+                t.Turno = elegidas.IndexOf(t) + 1;     
                 t.Enabled = !completo || t.Elegida;    // con 4 elegidos, las demás se bloquean
             }
 
