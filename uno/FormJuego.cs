@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Windows.Forms;
 
@@ -8,14 +9,18 @@ namespace uno
 {
     // ==========================================================
     //  PANTALLA DE JUEGO
-    //  - Muestra la mesa y la mano del jugador en turno.
+    //  - Mesa con el estilo pastel de la pantalla de inicio.
+    //  - Mano del jugador en turno boca arriba; rivales boca abajo.
     //  - Guarda cada movimiento en la base de datos (log).
     // ==========================================================
     public class FormJuego : Form
     {
         private const int ANCHO = 80;
         private const int ALTO = 120;
+        private const int ANCHO_MINI = 52;
+        private const int ALTO_MINI = 78;
         private const string CARPETA_IMAGENES = "Imagenes_pastel";
+        private const bool MOSTRAR_CARTAS_RIVALES = false;   // true = rivales boca arriba
 
         private Juego juego;
         private BaseDatos bd = new BaseDatos();
@@ -23,6 +28,7 @@ namespace uno
         private int idPartida = -1;
         private bool resultadoGuardado = false;
         private bool avisoBD = false;
+        private bool decirUno = false;
         private string mensajeError = null;
         private JugadorUno jugadorAnterior = null;
 
@@ -33,10 +39,10 @@ namespace uno
         private PictureBox picMazo;
         private PictureBox picDescarte;
         private Label lblColor;
-        private CheckBox chkUno;
-        private Button btnPasar;
-        private Button btnFaltaUno;
-        private Button btnSiguienteRonda;
+        private BotonPastel btnUno;
+        private BotonPastel btnPasar;
+        private BotonPastel btnFaltaUno;
+        private BotonPastel btnSiguienteRonda;
         private Label lblMensaje;
         private Label lblMano;
         private FlowLayoutPanel panelMano;
@@ -45,12 +51,49 @@ namespace uno
         public FormJuego(List<JugadorBD> jugadores)
         {
             Text = "UNO - Partida";
-            ClientSize = new Size(1200, 760);
+            ClientSize = new Size(1200, 780);
             StartPosition = FormStartPosition.CenterScreen;
-            BackColor = Color.DarkGreen;
+            DoubleBuffered = true;
+            SetStyle(ControlStyles.ResizeRedraw, true);
 
             CrearControles();
             IniciarPartida(jugadores);
+        }
+
+        // ---------- Fondo pastel (igual que la pantalla de inicio) ----------
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            Rectangle rect = ClientRectangle;
+            if (rect.Width < 2 || rect.Height < 2) { base.OnPaintBackground(e); return; }
+
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            using (LinearGradientBrush fondo = new LinearGradientBrush(rect, Color.White, Color.White, 55f))
+            {
+                ColorBlend mezcla = new ColorBlend();
+                mezcla.Positions = new float[] { 0f, 0.5f, 1f };
+                mezcla.Colors = new Color[]
+                {
+                    Color.FromArgb(240, 230, 255),   // lavanda
+                    Color.FromArgb(255, 232, 242),   // rosa
+                    Color.FromArgb(255, 241, 220)    // durazno
+                };
+                fondo.InterpolationColors = mezcla;
+                g.FillRectangle(fondo, rect);
+            }
+
+            float w = rect.Width, h = rect.Height;
+            DibujarCirculo(g, -0.10f * w, -0.20f * h, 0.42f * w, Color.FromArgb(90, Tema.Rosa));
+            DibujarCirculo(g, 0.78f * w, 0.55f * h, 0.40f * w, Color.FromArgb(80, Tema.Azul));
+            DibujarCirculo(g, 0.30f * w, 0.78f * h, 0.22f * w, Color.FromArgb(70, Tema.Amarillo));
+            DibujarCirculo(g, 0.86f * w, -0.12f * h, 0.20f * w, Color.FromArgb(70, Tema.MoradoPastel));
+        }
+
+        private static void DibujarCirculo(Graphics g, float x, float y, float d, Color color)
+        {
+            using (SolidBrush brocha = new SolidBrush(color))
+                g.FillEllipse(brocha, x, y, d, d);
         }
 
         // ---------- Iniciar partida y registrarla en la BD ----------
@@ -83,66 +126,65 @@ namespace uno
         // ---------- Construcción de la interfaz ----------
         private void CrearControles()
         {
-            lblInfo = CrearEtiqueta(new Point(20, 15), new Size(860, 30), 14);
+            lblInfo = CrearEtiqueta(new Point(20, 12), new Size(940, 32), 16);
 
             panelRivales = new FlowLayoutPanel();
             panelRivales.Location = new Point(20, 50);
-            panelRivales.Size = new Size(860, 70);
+            panelRivales.Size = new Size(940, 120);
+            panelRivales.BackColor = Color.Transparent;
             Controls.Add(panelRivales);
 
             picMazo = new PictureBox();
-            picMazo.Location = new Point(250, 140);
-            picMazo.Size = new Size(110, 165);
+            picMazo.Location = new Point(230, 185);
+            picMazo.Size = new Size(100, 150);
             picMazo.SizeMode = PictureBoxSizeMode.StretchImage;
+            picMazo.BackColor = Color.Transparent;
             picMazo.Cursor = Cursors.Hand;
             picMazo.Click += ClickMazo;
             Controls.Add(picMazo);
 
             picDescarte = new PictureBox();
-            picDescarte.Location = new Point(380, 140);
-            picDescarte.Size = new Size(110, 165);
+            picDescarte.Location = new Point(345, 185);
+            picDescarte.Size = new Size(100, 150);
             picDescarte.SizeMode = PictureBoxSizeMode.StretchImage;
+            picDescarte.BackColor = Color.Transparent;
             Controls.Add(picDescarte);
 
-            lblColor = CrearEtiqueta(new Point(520, 140), new Size(200, 35), 11);
+            lblColor = CrearEtiqueta(new Point(470, 185), new Size(220, 36), 12);
+            lblColor.TextAlign = ContentAlignment.MiddleCenter;
 
-            chkUno = new CheckBox();
-            chkUno.Text = "¡UNO!";
-            chkUno.Appearance = Appearance.Button;          // se ve como botón que se queda presionado
-            chkUno.TextAlign = ContentAlignment.MiddleCenter;
-            chkUno.Location = new Point(520, 185);
-            chkUno.Size = new Size(200, 35);
-            chkUno.Font = new Font("Arial", 11, FontStyle.Bold);
-            chkUno.BackColor = Color.White;
-            chkUno.CheckedChanged += (s, e) => chkUno.BackColor = chkUno.Checked ? Color.Gold : Color.White;
-            Controls.Add(chkUno);
+            btnUno = CrearBoton("¡UNO!", new Point(470, 228));
+            btnUno.Click += ClickUno;
 
-            btnPasar = CrearBoton("Pasar (después de robar)", new Point(520, 228));
+            btnPasar = CrearBoton("Pasar (después de robar)", new Point(470, 270));
             btnPasar.Click += ClickPasar;
 
-            btnFaltaUno = CrearBoton("¡Señalar falta de UNO!", new Point(520, 268));
+            btnFaltaUno = CrearBoton("¡Señalar falta de UNO!", new Point(470, 312));
             btnFaltaUno.Click += ClickFaltaUno;
 
-            btnSiguienteRonda = CrearBoton("Siguiente ronda", new Point(740, 185));
+            btnSiguienteRonda = CrearBoton("Siguiente ronda", new Point(710, 228));
             btnSiguienteRonda.Click += ClickSiguienteRonda;
 
-            lblMensaje = CrearEtiqueta(new Point(20, 320), new Size(860, 40), 12);
+            lblMensaje = CrearEtiqueta(new Point(20, 350), new Size(940, 30), 12);
 
-            lblMano = CrearEtiqueta(new Point(20, 365), new Size(860, 25), 12);
+            lblMano = CrearEtiqueta(new Point(20, 385), new Size(940, 26), 12);
 
             panelMano = new FlowLayoutPanel();
-            panelMano.Location = new Point(20, 395);
-            panelMano.Size = new Size(860, 350);
+            panelMano.Location = new Point(20, 415);
+            panelMano.Size = new Size(940, 350);
             panelMano.AutoScroll = true;
+            panelMano.BackColor = Color.Transparent;
             Controls.Add(panelMano);
 
-            Label lblLog = CrearEtiqueta(new Point(900, 15), new Size(280, 30), 12);
+            Label lblLog = CrearEtiqueta(new Point(980, 12), new Size(200, 32), 13);
             lblLog.Text = "Movimientos";
 
             lstLog = new ListBox();
-            lstLog.Location = new Point(900, 50);
-            lstLog.Size = new Size(280, 695);
+            lstLog.Location = new Point(980, 50);
+            lstLog.Size = new Size(200, 715);
             lstLog.HorizontalScrollbar = true;
+            lstLog.BorderStyle = BorderStyle.None;
+            lstLog.ForeColor = Tema.Texto;
             Controls.Add(lstLog);
         }
 
@@ -151,20 +193,21 @@ namespace uno
             Label etiqueta = new Label();
             etiqueta.Location = posicion;
             etiqueta.Size = tamano;
-            etiqueta.Font = new Font("Arial", tamanoLetra, FontStyle.Bold);
-            etiqueta.ForeColor = Color.White;
+            etiqueta.Font = new Font("Segoe UI Semibold", tamanoLetra, FontStyle.Regular);
+            etiqueta.ForeColor = Tema.Texto;
+            etiqueta.BackColor = Color.Transparent;
             etiqueta.TextAlign = ContentAlignment.MiddleLeft;
             Controls.Add(etiqueta);
             return etiqueta;
         }
 
-        private Button CrearBoton(string texto, Point posicion)
+        private BotonPastel CrearBoton(string texto, Point posicion)
         {
-            Button boton = new Button();
+            BotonPastel boton = new BotonPastel();
             boton.Text = texto;
+            boton.Font = new Font("Segoe UI Semibold", 10, FontStyle.Regular);
             boton.Location = posicion;
-            boton.Size = new Size(200, 35);
-            boton.BackColor = Color.White;
+            boton.Size = new Size(220, 36);
             Controls.Add(boton);
             return boton;
         }
@@ -179,55 +222,10 @@ namespace uno
             else if (juego.RondaTerminada)
                 lblInfo.Text = "Terminó la ronda " + juego.NumeroRonda;
             else
-                lblInfo.Text = "Ronda " + juego.NumeroRonda + " - Turno de " + actual.Nombre;
+                lblInfo.Text = "Ronda " + juego.NumeroRonda + "  ·  Turno de " + actual.Nombre;
 
-            // Rivales: solo cuántas cartas tienen
-            panelRivales.Controls.Clear();
-            for (int i = 0; i < juego.Jugadores.Count; i++)
-            {
-                JugadorUno jugador = juego.Jugadores[i];
-                Label etiqueta = new Label();
-                etiqueta.AutoSize = true;
-                etiqueta.Margin = new Padding(0, 0, 25, 0);
-                etiqueta.Font = new Font("Arial", 11, FontStyle.Bold);
-                etiqueta.Text = jugador.Nombre + ": " + jugador.Mano.Count + " cartas (" + jugador.Puntos + " pts)";
-                etiqueta.ForeColor = Object.ReferenceEquals(jugador, actual) ? Color.Yellow : Color.White;
-                panelRivales.Controls.Add(etiqueta);
-            }
-
-            // Mano del jugador en turno
-            for (int i = panelMano.Controls.Count - 1; i >= 0; i--)
-                panelMano.Controls[i].Dispose();
-            panelMano.Controls.Clear();
-
-            if (!juego.RondaTerminada)
-            {
-                lblMano.Text = "Mano de " + actual.Nombre + " (las cartas en amarillo se pueden jugar)";
-
-                foreach (Carta carta in actual.Mano)
-                {
-                    PictureBox pb = new PictureBox();
-                    pb.Size = new Size(ANCHO, ALTO);
-                    pb.SizeMode = PictureBoxSizeMode.StretchImage;
-                    pb.Margin = new Padding(4);
-                    pb.Cursor = Cursors.Hand;
-                    pb.Image = ObtenerImagen(carta);
-
-                    if (juego.PuedeJugar(carta))
-                    {
-                        pb.Padding = new Padding(3);
-                        pb.BackColor = Color.Yellow;
-                    }
-
-                    Carta cartaClic = carta;
-                    pb.Click += (s, e) => ClickCarta(cartaClic);
-                    panelMano.Controls.Add(pb);
-                }
-            }
-            else
-            {
-                lblMano.Text = "";
-            }
+            DibujarRivales(actual);
+            DibujarMano(actual);
 
             picMazo.Image = ObtenerReverso();
             picDescarte.Image = ObtenerImagen(juego.CartaSuperior);
@@ -241,12 +239,17 @@ namespace uno
             if (mensajeError != null)
             {
                 lblMensaje.Text = mensajeError;
+                lblMensaje.ForeColor = Color.Firebrick;
                 mensajeError = null;
             }
-            else if (juego.RondaTerminada && !juego.PartidaTerminada)
-                lblMensaje.Text = "Da clic en \"Siguiente ronda\" para continuar.";
             else
-                lblMensaje.Text = "";
+            {
+                lblMensaje.ForeColor = Tema.Texto;
+                if (juego.RondaTerminada && !juego.PartidaTerminada)
+                    lblMensaje.Text = "Da clic en \"Siguiente ronda\" para continuar.";
+                else
+                    lblMensaje.Text = "";
+            }
 
             lstLog.Items.Clear();
             foreach (string movimiento in juego.Movimientos)
@@ -254,10 +257,103 @@ namespace uno
             if (lstLog.Items.Count > 0)
                 lstLog.TopIndex = lstLog.Items.Count - 1;
 
-            chkUno.Enabled = !juego.RondaTerminada;
+            btnUno.Text = decirUno ? "¡UNO! ✓" : "¡UNO!";
+            btnUno.Enabled = !juego.RondaTerminada;
             btnPasar.Enabled = !juego.RondaTerminada;
             btnFaltaUno.Enabled = juego.FaltaUnoPendiente;
             btnSiguienteRonda.Enabled = juego.RondaTerminada && !juego.PartidaTerminada;
+        }
+
+        // Cartas de los demás jugadores (boca abajo, encimadas)
+        private void DibujarRivales(JugadorUno actual)
+        {
+            for (int i = panelRivales.Controls.Count - 1; i >= 0; i--)
+                panelRivales.Controls[i].Dispose();
+            panelRivales.Controls.Clear();
+
+            for (int i = 0; i < juego.Jugadores.Count; i++)
+            {
+                JugadorUno jugador = juego.Jugadores[i];
+                if (Object.ReferenceEquals(jugador, actual) && !juego.RondaTerminada)
+                    continue;
+
+                Panel bloque = new Panel();
+                bloque.Size = new Size(300, 115);
+                bloque.Margin = new Padding(0, 0, 10, 0);
+                bloque.BackColor = Color.Transparent;
+
+                Label nombre = new Label();
+                nombre.Location = new Point(0, 0);
+                nombre.Size = new Size(300, 24);
+                nombre.Font = new Font("Segoe UI Semibold", 10, FontStyle.Regular);
+                nombre.ForeColor = Tema.Texto;
+                nombre.BackColor = Color.Transparent;
+                nombre.Text = jugador.Nombre + ": " + jugador.Mano.Count + " cartas (" + jugador.Puntos + " pts)";
+                bloque.Controls.Add(nombre);
+
+                // Si tiene muchas cartas, se enciman más para que quepan
+                int cantidad = jugador.Mano.Count;
+                int paso = 30;
+                if (cantidad > 1)
+                {
+                    int pasoMaximo = (300 - ANCHO_MINI) / (cantidad - 1);
+                    if (pasoMaximo < paso)
+                        paso = pasoMaximo;
+                }
+
+                for (int c = 0; c < cantidad; c++)
+                {
+                    PictureBox mini = new PictureBox();
+                    mini.Location = new Point(c * paso, 30);
+                    mini.Size = new Size(ANCHO_MINI, ALTO_MINI);
+                    mini.SizeMode = PictureBoxSizeMode.StretchImage;
+                    if (MOSTRAR_CARTAS_RIVALES)
+                        mini.Image = ObtenerImagen(jugador.Mano[c]);
+                    else
+                        mini.Image = ObtenerReverso();
+                    bloque.Controls.Add(mini);
+                    mini.BringToFront();
+                }
+
+                panelRivales.Controls.Add(bloque);
+            }
+        }
+
+        // Mano del jugador en turno (boca arriba)
+        private void DibujarMano(JugadorUno actual)
+        {
+            for (int i = panelMano.Controls.Count - 1; i >= 0; i--)
+                panelMano.Controls[i].Dispose();
+            panelMano.Controls.Clear();
+
+            if (juego.RondaTerminada)
+            {
+                lblMano.Text = "";
+                return;
+            }
+
+            lblMano.Text = "Mano de " + actual.Nombre + "  (las cartas resaltadas se pueden jugar)";
+
+            foreach (Carta carta in actual.Mano)
+            {
+                PictureBox pb = new PictureBox();
+                pb.Size = new Size(ANCHO, ALTO);
+                pb.SizeMode = PictureBoxSizeMode.StretchImage;
+                pb.Margin = new Padding(4);
+                pb.Cursor = Cursors.Hand;
+                pb.BackColor = Color.Transparent;
+                pb.Image = ObtenerImagen(carta);
+
+                if (juego.PuedeJugar(carta))
+                {
+                    pb.Padding = new Padding(3);
+                    pb.BackColor = Color.Gold;
+                }
+
+                Carta cartaClic = carta;
+                pb.Click += (s, e) => ClickCarta(cartaClic);
+                panelMano.Controls.Add(pb);
+            }
         }
 
         // ---------- Después de cada acción ----------
@@ -288,6 +384,7 @@ namespace uno
             if (!juego.RondaTerminada && !Object.ReferenceEquals(juego.JugadorActual, jugadorAnterior))
             {
                 jugadorAnterior = juego.JugadorActual;
+                decirUno = false;
                 CambioDeTurno();
             }
 
@@ -318,16 +415,22 @@ namespace uno
             if (carta.EsComodin())
                 colorElegido = ElegirColor("Elige un color");
 
-            bool decirUno = chkUno.Checked;
-            if (Intentar(() => juego.JugarCarta(carta, colorElegido, decirUno)))
+            bool unoDicho = decirUno;
+            if (Intentar(() => juego.JugarCarta(carta, colorElegido, unoDicho)))
             {
                 Registrar(indice, "jugar", carta.Texto(), colorElegido);
-                if (decirUno)
+                if (unoDicho)
                     Registrar(indice, "uno");
-                chkUno.Checked = false;
+                decirUno = false;
             }
 
             DespuesDeAccion();
+        }
+
+        private void ClickUno(object sender, EventArgs e)
+        {
+            decirUno = !decirUno;   // se presiona antes de jugar la penúltima carta
+            Actualizar();
         }
 
         private void ClickMazo(object sender, EventArgs e)
@@ -441,26 +544,29 @@ namespace uno
         // Ventana para elegir color (obligatoria, sin X)
         private string ElegirColor(string titulo)
         {
-            string elegido = "Rojo";
+            string elegido = "Rosa";
 
             Form ventana = new Form();
             ventana.Text = titulo;
-            ventana.ClientSize = new Size(360, 90);
+            ventana.ClientSize = new Size(380, 90);
             ventana.FormBorderStyle = FormBorderStyle.FixedDialog;
             ventana.StartPosition = FormStartPosition.CenterParent;
             ventana.ControlBox = false;
+            ventana.BackColor = Color.FromArgb(250, 245, 255);
 
-            string[] colores = { "Azul", "Verde", "Amarillo", "Rojo" };
+            string[] colores = { "Rosa", "Morado", "Azul", "Amarillo" };
             for (int i = 0; i < colores.Length; i++)
             {
                 string colorBoton = colores[i];
                 Button boton = new Button();
                 boton.Text = colorBoton;
-                boton.Location = new Point(10 + i * 87, 20);
-                boton.Size = new Size(80, 50);
+                boton.Location = new Point(10 + i * 92, 20);
+                boton.Size = new Size(85, 50);
+                boton.FlatStyle = FlatStyle.Flat;
+                boton.FlatAppearance.BorderSize = 0;
                 boton.BackColor = ColorDibujo(colorBoton);
-                boton.ForeColor = Color.White;
-                boton.Font = new Font("Arial", 9, FontStyle.Bold);
+                boton.ForeColor = Tema.Texto;
+                boton.Font = new Font("Segoe UI Semibold", 10, FontStyle.Regular);
                 boton.Click += (s, e) =>
                 {
                     elegido = colorBoton;
@@ -476,16 +582,14 @@ namespace uno
 
         private Color ColorDibujo(string color)
         {
-            if (color == "Azul") return Color.RoyalBlue;
-            if (color == "Verde") return Color.ForestGreen;
-            if (color == "Amarillo") return Color.Goldenrod;
-            if (color == "Rojo") return Color.Firebrick;
-            return Color.Black;
+            if (color == "Rosa") return Tema.Rosa;
+            if (color == "Morado") return Tema.MoradoPastel;
+            if (color == "Azul") return Tema.Azul;
+            if (color == "Amarillo") return Tema.Amarillo;
+            return Color.FromArgb(70, 60, 90);   // comodines y "sin color"
         }
 
         // ---------- Imágenes ----------
-        // Cuando terminen ImagenesCartas.cs, se pueden cambiar estos dos métodos por:
-        //   return ImagenesCartas.Obtener(carta);   y   return ImagenesCartas.Reverso();
         private Image ObtenerImagen(Carta carta)
         {
             return Cargar(carta.NombreImagen(), carta.Texto(), ColorDibujo(carta.Color));
@@ -493,7 +597,7 @@ namespace uno
 
         private Image ObtenerReverso()
         {
-            return Cargar("reverso.png", "UNO", Color.Black);
+            return Cargar("reverso.png", "UNO", Color.FromArgb(70, 60, 90));
         }
 
         private Image Cargar(string nombreArchivo, string textoProvisional, Color fondo)
@@ -502,9 +606,9 @@ namespace uno
                 return imagenes[nombreArchivo];
 
             Image imagen;
-            string ruta = Path.Combine(Application.StartupPath, CARPETA_IMAGENES, nombreArchivo);
+            string ruta = RutaImagen(nombreArchivo);
 
-            if (File.Exists(ruta))
+            if (ruta != null)
                 imagen = Image.FromFile(ruta);
             else
                 imagen = CrearProvisional(textoProvisional, fondo);
@@ -513,21 +617,41 @@ namespace uno
             return imagen;
         }
 
+        // Busca la imagen; si no existe con Rosa/Morado, prueba con los nombres viejos (rojo/verde)
+        private string RutaImagen(string nombreArchivo)
+        {
+            string ruta = Path.Combine(Application.StartupPath, CARPETA_IMAGENES, nombreArchivo);
+            if (File.Exists(ruta))
+                return ruta;
+
+            string alterno = nombreArchivo.Replace("rosa_", "rojo_").Replace("morado_", "verde_");
+            ruta = Path.Combine(Application.StartupPath, CARPETA_IMAGENES, alterno);
+            if (File.Exists(ruta))
+                return ruta;
+
+            return null;
+        }
+
+        // Carta dibujada cuando no existe la imagen
         private Image CrearProvisional(string texto, Color fondo)
         {
             Bitmap imagen = new Bitmap(ANCHO, ALTO);
 
             using (Graphics g = Graphics.FromImage(imagen))
             {
-                g.Clear(fondo);
-                g.DrawRectangle(Pens.White, 4, 4, ANCHO - 9, ALTO - 9);
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.Clear(Color.White);
 
-                using (Font fuente = new Font("Arial", 11, FontStyle.Bold))
+                using (SolidBrush brocha = new SolidBrush(fondo))
+                    g.FillRectangle(brocha, 4, 4, ANCHO - 8, ALTO - 8);
+
+                using (Font fuente = new Font("Segoe UI Semibold", 11, FontStyle.Regular))
                 {
                     StringFormat formato = new StringFormat();
                     formato.Alignment = StringAlignment.Center;
                     formato.LineAlignment = StringAlignment.Center;
-                    g.DrawString(texto, fuente, Brushes.White, new RectangleF(0, 0, ANCHO, ALTO), formato);
+                    Brush brochaTexto = (fondo.GetBrightness() < 0.4f) ? Brushes.White : new SolidBrush(Tema.Texto);
+                    g.DrawString(texto, fuente, brochaTexto, new RectangleF(0, 0, ANCHO, ALTO), formato);
                 }
             }
 
