@@ -6,53 +6,109 @@ using System.Drawing.Text;
 using System.IO;
 using System.Windows.Forms;
 
+/*
+
+  QUÉ ES
+  - Es la ventana donde se juega. La abre FormInicio con los 4 jugadores
+    elegidos (List<JugadorBD>, que trae id y nombre de la base de datos).
+  - NO tiene las reglas: las reglas están en Juego.cs (motor). Esta clase
+    solo DIBUJA el estado del juego y le MANDA las acciones del usuario.
+  - Además guarda cada movimiento en la BD (log) usando BaseDatos.cs,
+    que llama a la API en Python, y la API guarda en MySQL.
+
+  FLUJO GENERAL
+  1. Constructor: tamaño, colores, fuente -> CrearControles() -> IniciarPartida().
+  2. IniciarPartida(): separa nombres e ids, crea el Juego, reparte si hace
+     falta (IniciarRonda) y crea la partida en la BD (bd.CrearPartida -> idPartida).
+  3. Cada clic -> evento (ClickCarta, ClickMazo...) -> Intentar(acción del motor)
+     -> si salió bien, Registrar(...) en la BD -> DespuesDeAccion().
+  4. DespuesDeAccion(): resuelve lo pendiente (color inicial si sale comodín,
+     desafío del +4), detecta cambio de turno, llama Actualizar() y, si
+     terminó la partida, GuardarResultado() una sola vez.
+  5. Actualizar(): borra las cartas de la mesa y las vuelve a dibujar todas
+     con el estado actual del juego.
+
+  LA MESA (forma de los asientos)
+  - ABAJO = jugador en turno (cartas grandes y clicables).
+    IZQUIERDA, ARRIBA, DERECHA = los demás, en orden de turno.
+  - Fórmula del rival: (indiceActual + k + 1) % cantidadJugadores
+    -> por eso la mesa "gira" y el jugador en turno siempre queda abajo.
+  - CalcularPaso(): separación entre cartas; si no caben, se enciman más.
+  - AgregarCarta(): crea un PictureBox; BringToFront() pone cada carta
+    encima de la anterior; se guarda en cartasEnMesa para borrarla después.
+  - ImagenRival(): cartas de los lados giradas 90° con RotateFlip.
+  - Cartas jugables (juego.PuedeJugar): suben un poco y tienen borde dorado.
+  - DibujarRombo(): dibuja en un Bitmap el rombo del color activo.
+
+  IMÁGENES
+  - Cargar(): usa un Dictionary como caché para no leer el disco cada vez.
+  - RutaImagen(): busca en la carpeta Imagenes_pastel con el nombre que da
+    carta.NombreImagen() (ej. rosa_5.png). Si no existe, prueba los nombres
+    viejos (rojo_ / verde_).
+  - CrearProvisional(): si no hay imagen, dibuja una carta con su texto.
+
+  FUENTE (Fredoka)
+  - Se carga desde Fuentes\Fredoka-Light.ttf con PrivateFontCollection,
+    así funciona en cualquier compu sin instalarla.
+  - UseCompatibleTextRendering = true: sin eso, las etiquetas no pueden
+    dibujar fuentes cargadas desde archivo.
+  - Si no encuentra el archivo, usa Segoe UI para que el juego no truene.
+
+  BASE DE DATOS (log)
+  - bd.CrearPartida(ids)            -> al empezar; regresa idPartida.
+  - bd.RegistrarMovimiento(...)     -> en cada acción. Tipos que se guardan:
+      jugar, robar, pasar, uno, falta_uno, color_inicial,
+      desafio_mas4, acepta_mas4.
+  - bd.RegistrarResultado(...)      -> al final: ganador y cartas restantes.
+  - idsJugadores tiene el id de la BD de cada jugador, en el mismo orden
+    que juego.Jugadores (por eso se usa el mismo índice).
+  - Si la API está apagada, el juego sigue funcionando; AvisarErrorBD()
+    muestra el aviso UNA sola vez (variable avisoBD).
+
+  MANEJO DE ERRORES
+  - Intentar(Action): ejecuta una acción del motor dentro de try/catch.
+    Si la jugada no es válida, el motor lanza una excepción, el mensaje
+    se guarda en mensajeError y se muestra en rojo. El juego no se cierra.
+
+  EVENTOS (botones y clics)
+  - ClickCarta: si es comodín, primero pide color (ElegirColor); manda si
+    se dijo UNO. ClickUno: activa o desactiva "decir UNO" para la jugada.
+  - ClickMazo: robar. ClickPasar: pasar después de robar.
+  - ClickFaltaUno: castigar a quien no dijo UNO.
+  - ClickSiguienteRonda: empieza otra ronda (IniciarRonda).
+  - ElegirColor(): ventana modal (ShowDialog). ControlBox = false quita la
+    X, así que es obligatorio elegir un color.
+
+ */
+
 namespace uno
 {
-    // ==========================================================
-    //  PANTALLA DE JUEGO (forma de mesa)
-    //  - Abajo: mano del jugador en turno.
-    //  - Izquierda, arriba y derecha: los demás jugadores.
-    //  - Centro: mazo, descarte y color activo.
-    //  - Guarda cada movimiento en la base de datos (log).
-    // ==========================================================
     public class FormJuego : Form
     {
         // Tamaños de cartas
-        private const int ANCHO = 105;          // mano del jugador en turno
+        private const int ANCHO = 105;          
         private const int ALTO = 158;
-        private const int ANCHO_MINI = 60;      // cartas de los rivales
+        private const int ANCHO_MINI = 60;
         private const int ALTO_MINI = 90;
 
         private const string CARPETA_IMAGENES = "Imagenes_pastel";
-        private const string ARCHIVO_FUENTE = "Fredoka-Light.ttf";   // en la carpeta Fuentes
-        private const bool MOSTRAR_CARTAS_RIVALES = true;   // false = rivales boca abajo
-
-        //Version 1: efeff1
-        //Version 2: f0f2f5
-        //Version 3: eaf4ed
-        //Version 4: f5f5f5
-
+        private const string ARCHIVO_FUENTE = "Fredoka-Light.ttf"; 
+        private const bool MOSTRAR_CARTAS_RIVALES = true;   
         private static readonly Color COLOR_FONDO = ColorTranslator.FromHtml("#2b2633");
-
-        // ===== COLOR DE LA LETRA (cámbialo aquí) =====
         private static readonly Color COLOR_TEXTO = ColorTranslator.FromHtml("#F5F0FF");
         private static readonly Color COLOR_ERROR = ColorTranslator.FromHtml("#FF8A8A");
-
         private static readonly Color COLOR_BOTONES = ColorTranslator.FromHtml("#5ED6A8");
 
-        // Asientos de la mesa
         private const int ABAJO = 0;
         private const int IZQUIERDA = 1;
         private const int ARRIBA = 2;
         private const int DERECHA = 3;
 
-        // Fuente Fredoka cargada desde archivo
         private static PrivateFontCollection fuentes = null;
         private static FontFamily familiaFredoka = null;
-
         private Juego juego;
         private BaseDatos bd = new BaseDatos();
-        private List<int> idsJugadores = new List<int>();   // id en la BD de cada jugador, en el mismo orden
+        private List<int> idsJugadores = new List<int>();
         private int idPartida = -1;
         private bool resultadoGuardado = false;
         private bool avisoBD = false;
@@ -61,7 +117,7 @@ namespace uno
         private JugadorUno jugadorAnterior = null;
 
         private Dictionary<string, Image> imagenes = new Dictionary<string, Image>();
-        private List<Control> cartasEnMesa = new List<Control>();   // se borran y se vuelven a dibujar
+        private List<Control> cartasEnMesa = new List<Control>();
 
         private Label lblInfo;
         private Label lblSentido;
@@ -84,16 +140,13 @@ namespace uno
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             DoubleBuffered = true;
-            BackColor = COLOR_FONDO;   // fondo liso
+            BackColor = COLOR_FONDO;
             Font = Fuente(10);
 
             CrearControles();
             IniciarPartida(jugadores);
         }
 
-        // ---------- Fuente Fredoka ----------
-        // Busca Fuentes\Fredoka-SemiBold.ttf junto al .exe.
-        // Si no está, usa Fredoka instalada en Windows; si tampoco, Segoe UI.
         private Font Fuente(float tamano)
         {
             if (familiaFredoka == null)
@@ -118,7 +171,7 @@ namespace uno
             return new Font("Segoe UI Semibold", tamano, FontStyle.Regular);
         }
 
-        // ---------- Iniciar partida y registrarla en la BD ----------
+        //Inicio de la partida
         private void IniciarPartida(List<JugadorBD> jugadores)
         {
             List<string> nombres = new List<string>();
@@ -145,7 +198,7 @@ namespace uno
             DespuesDeAccion();
         }
 
-        // ---------- Construcción de la interfaz ----------
+        // Construir la interfaz
         private void CrearControles()
         {
             lblInfo = CrearEtiqueta(new Point(20, 10), new Size(300, 56), 13);
@@ -154,7 +207,6 @@ namespace uno
             lblSentido = CrearEtiqueta(new Point(900, 10), new Size(280, 30), 12);
             lblSentido.TextAlign = ContentAlignment.TopRight;
 
-            // Nombres de cada asiento
             lblAsientos[ABAJO] = CrearEtiqueta(new Point(150, 428), new Size(600, 26), 12);
             lblAsientos[IZQUIERDA] = CrearEtiqueta(new Point(20, 145), new Size(220, 26), 11);
             lblAsientos[ARRIBA] = CrearEtiqueta(new Point(330, 12), new Size(540, 26), 11);
@@ -162,7 +214,6 @@ namespace uno
             lblAsientos[DERECHA] = CrearEtiqueta(new Point(960, 145), new Size(220, 26), 11);
             lblAsientos[DERECHA].TextAlign = ContentAlignment.MiddleRight;
 
-            // Centro de la mesa
             picMazo = new PictureBox();
             picMazo.Location = new Point(400, 210);
             picMazo.Size = new Size(ANCHO, ALTO);
@@ -188,7 +239,6 @@ namespace uno
             lblColor = CrearEtiqueta(new Point(630, 322), new Size(120, 24), 10);
             lblColor.TextAlign = ContentAlignment.MiddleCenter;
 
-            // Botones
             btnUno = CrearBoton("¡UNO!", new Point(790, 205));
             btnUno.Click += ClickUno;
 
@@ -210,9 +260,9 @@ namespace uno
             Label etiqueta = new Label();
             etiqueta.Location = posicion;
             etiqueta.Size = tamano;
-            etiqueta.UseCompatibleTextRendering = true;   // necesario para fuentes cargadas desde archivo
+            etiqueta.UseCompatibleTextRendering = true;
             etiqueta.Font = Fuente(tamanoLetra);
-            etiqueta.ForeColor = COLOR_TEXTO;              // <-- color de todos los textos
+            etiqueta.ForeColor = COLOR_TEXTO;
             etiqueta.BackColor = Color.Transparent;
             etiqueta.TextAlign = ContentAlignment.MiddleLeft;
             Controls.Add(etiqueta);
@@ -226,14 +276,14 @@ namespace uno
             boton.Font = Fuente(10);
             boton.Location = posicion;
             boton.Size = new Size(200, 36);
-            boton.ColorInicio = COLOR_BOTONES;   // mismo color en los dos lados = color liso
+            boton.ColorInicio = COLOR_BOTONES;
             boton.ColorFin = COLOR_BOTONES;
-            boton.ColorLetra = Color.Black;      // letra negra solo en estos botones
+            boton.ColorLetra = Color.Black;
             Controls.Add(boton);
             return boton;
         }
 
-        // ---------- Redibujar la pantalla ----------
+        //Volver a dibujar la pantalla después de cada acción
         private void Actualizar()
         {
             JugadorUno actual = juego.JugadorActual;
@@ -256,7 +306,7 @@ namespace uno
             for (int i = 0; i < 4; i++)
                 lblAsientos[i].Text = "";
 
-            // Rivales: en orden de turno a partir del jugador actual
+            // Rivales
             int[] asientos = AsientosRivales(juego.Jugadores.Count);
             for (int k = 0; k < asientos.Length; k++)
             {
@@ -270,7 +320,7 @@ namespace uno
                     DibujarLado(rival, asientos[k] == IZQUIERDA ? 20 : 1090);
             }
 
-            // Jugador en turno (abajo)
+            // Jugador en turno
             if (!juego.RondaTerminada)
             {
                 lblAsientos[ABAJO].Text = TextoJugador(actual) + "  ·  tu turno";
@@ -314,7 +364,6 @@ namespace uno
             return jugador.Nombre + "  ·  " + jugador.Mano.Count + " cartas  ·  " + jugador.Puntos + " pts";
         }
 
-        // Qué asientos usan los rivales según cuántos jugadores hay
         private int[] AsientosRivales(int cantidadJugadores)
         {
             if (cantidadJugadores == 2)
@@ -324,7 +373,6 @@ namespace uno
             return new int[] { IZQUIERDA, ARRIBA, DERECHA };
         }
 
-        // Separación entre cartas: se enciman más si no caben
         private int CalcularPaso(int cantidad, int espacio, int tamanoCarta, int pasoNormal)
         {
             if (cantidad <= 1)
@@ -336,7 +384,6 @@ namespace uno
             return pasoNormal;
         }
 
-        // Rival de arriba: fila horizontal centrada
         private void DibujarArriba(JugadorUno jugador)
         {
             int cantidad = jugador.Mano.Count;
@@ -348,8 +395,6 @@ namespace uno
             for (int c = 0; c < cantidad; c++)
                 AgregarCarta(ImagenRival(jugador.Mano[c], false), x + c * paso, 42, ANCHO_MINI, ALTO_MINI);
         }
-
-        // Rivales de los lados: columna de cartas acostadas
         private void DibujarLado(JugadorUno jugador, int x)
         {
             int cantidad = jugador.Mano.Count;
@@ -362,7 +407,6 @@ namespace uno
                 AgregarCarta(ImagenRival(jugador.Mano[c], true), x, y + c * paso, ALTO_MINI, ANCHO_MINI);
         }
 
-        // Jugador en turno: cartas grandes; las que se pueden jugar suben
         private void DibujarMano(JugadorUno jugador)
         {
             int cantidad = jugador.Mano.Count;
@@ -422,7 +466,6 @@ namespace uno
             if (!acostada)
                 return imagen;
 
-            // Versión girada 90° (se guarda para no girarla cada vez)
             string claveGirada = clave + "|girada";
             if (!imagenes.ContainsKey(claveGirada))
             {
@@ -433,7 +476,6 @@ namespace uno
             return imagenes[claveGirada];
         }
 
-        // Rombo del color activo (centro de la mesa)
         private Image DibujarRombo(Color color)
         {
             Bitmap imagen = new Bitmap(80, 80);
@@ -449,10 +491,9 @@ namespace uno
             return imagen;
         }
 
-        // ---------- Después de cada acción ----------
+        //Despues de cada accion
         private void DespuesDeAccion()
         {
-            // Carta inicial comodín: el jugador en turno elige el color
             if (!juego.RondaTerminada && juego.ColorActivo == null)
             {
                 int indice = IndiceDe(juego.JugadorActual);
@@ -483,7 +524,7 @@ namespace uno
 
             Actualizar();
 
-            // Fin de la partida: se guarda el resultado una sola vez
+            // Fin de la partida
             if (juego.PartidaTerminada && !resultadoGuardado)
             {
                 resultadoGuardado = true;
@@ -491,8 +532,6 @@ namespace uno
                 MessageBox.Show("¡" + juego.GanadorPartida.Nombre + " ganó la partida!", "Fin de la partida");
             }
         }
-
-        // Aquí se puede mostrar la pantalla de "pasa la computadora"
         private void CambioDeTurno()
         {
         }
@@ -634,7 +673,7 @@ namespace uno
             return -1;
         }
 
-        // Ventana para elegir color (obligatoria, sin X)
+        // Ventana para elegir color
         private string ElegirColor(string titulo)
         {
             string elegido = "Rosa";
@@ -658,7 +697,7 @@ namespace uno
                 boton.FlatStyle = FlatStyle.Flat;
                 boton.FlatAppearance.BorderSize = 0;
                 boton.BackColor = ColorDibujo(colorBoton);
-                boton.ForeColor = Tema.Texto;            // letra oscura sobre botón pastel
+                boton.ForeColor = Tema.Texto;         
                 boton.UseCompatibleTextRendering = true;
                 boton.Font = Fuente(10);
                 boton.Click += (s, e) =>
@@ -680,10 +719,9 @@ namespace uno
             if (color == "Morado") return Tema.MoradoPastel;
             if (color == "Azul") return Tema.Azul;
             if (color == "Amarillo") return Tema.Amarillo;
-            return Color.FromArgb(70, 60, 90);   // comodines y "sin color"
+            return Color.FromArgb(70, 60, 90);
         }
 
-        // ---------- Imágenes ----------
         private Image ObtenerImagen(Carta carta)
         {
             return Cargar(carta.NombreImagen(), carta.Texto(), ColorDibujo(carta.Color));
@@ -711,7 +749,6 @@ namespace uno
             return imagen;
         }
 
-        // Busca la imagen; si no existe con Rosa/Morado, prueba con los nombres viejos (rojo/verde)
         private string RutaImagen(string nombreArchivo)
         {
             string ruta = Path.Combine(Application.StartupPath, CARPETA_IMAGENES, nombreArchivo);
@@ -726,7 +763,6 @@ namespace uno
             return null;
         }
 
-        // Carta dibujada cuando no existe la imagen
         private Image CrearProvisional(string texto, Color fondo)
         {
             Bitmap imagen = new Bitmap(ANCHO, ALTO);
