@@ -38,6 +38,8 @@ namespace uno
         private static readonly Color COLOR_TEXTO = ColorTranslator.FromHtml("#F5F0FF");
         private static readonly Color COLOR_ERROR = ColorTranslator.FromHtml("#FF8A8A");
 
+        private static readonly Color COLOR_BOTONES = ColorTranslator.FromHtml("#5ED6A8");
+
         // Asientos de la mesa
         private const int ABAJO = 0;
         private const int IZQUIERDA = 1;
@@ -224,6 +226,8 @@ namespace uno
             boton.Font = Fuente(10);
             boton.Location = posicion;
             boton.Size = new Size(200, 36);
+            boton.ColorInicio = COLOR_BOTONES;   // mismo color en los dos lados = color liso
+            boton.ColorFin = COLOR_BOTONES;
             Controls.Add(boton);
             return boton;
         }
