@@ -95,31 +95,32 @@ namespace uno
         {
             if (elegidas.Count != Requeridos) return;
 
-            // Nombres en el orden en que se eligieron 
-            var nombres = elegidas.Select(t => t.Jugador.nombre).ToList();
+            // Jugadores en el orden en que se eligieron
+            List<JugadorBD> jugadores = new List<JugadorBD>();
+            for (int i = 0; i < elegidas.Count; i++)
+                jugadores.Add(elegidas[i].Jugador);
 
-            Juego juego;
+            FormJuego pantalla;
             try
             {
-                juego = new Juego(nombres);
+                pantalla = new FormJuego(jugadores);
             }
-            catch (ArgumentException ex)
+            catch (Exception ex)
             {
                 MessageBox.Show("No se pudo crear la partida.\n\n" + ex.Message,
                     "UNO", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            string orden = string.Join("\n", nombres.Select((n, i) => (i + 1) + ". " + n));
-            string color = juego.ColorActivo ?? "(se elige al empezar)";
+            // Al cerrar el juego, regresa al inicio y recarga las ganadas/perdidas
+            pantalla.FormClosed += (s, a) =>
+            {
+                Show();
+                CargarJugadores();
+            };
 
-            MessageBox.Show(
-                 "Orden de turnos:\n" + orden + "\n\n" +
-                 "Reparte: " + juego.Repartidor.Nombre + "\n" +
-                 "Empieza: " + juego.JugadorActual.Nombre + "\n\n" +
-                 "Carta inicial: " + juego.CartaSuperior.Texto() + "\n" +
-                 "Color activo: " + color,
-                 "Partida lista (prueba)", MessageBoxButtons.OK, MessageBoxIcon.Information); ;
+            pantalla.Show();
+            Hide();
         }
 
         private void CargarJugadores()
