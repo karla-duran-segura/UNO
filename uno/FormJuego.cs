@@ -24,7 +24,7 @@ namespace uno
         private const int ALTO_MINI = 90;
 
         private const string CARPETA_IMAGENES = "Imagenes_pastel";
-        private const string ARCHIVO_FUENTE = "Fredoka-SemiBold.ttf";   // en la carpeta Fuentes
+        private const string ARCHIVO_FUENTE = "Fredoka-Light.ttf";   // en la carpeta Fuentes
         private const bool MOSTRAR_CARTAS_RIVALES = true;   // false = rivales boca abajo
 
         //Version 1: efeff1
