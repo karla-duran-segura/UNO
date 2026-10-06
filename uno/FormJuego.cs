@@ -27,7 +27,16 @@ namespace uno
         private const string ARCHIVO_FUENTE = "Fredoka-SemiBold.ttf";   // en la carpeta Fuentes
         private const bool MOSTRAR_CARTAS_RIVALES = true;   // false = rivales boca abajo
 
-        private static readonly Color COLOR_FONDO = ColorTranslator.FromHtml("#26d4c7");
+        //Version 1: efeff1
+        //Version 2: f0f2f5
+        //Version 3: eaf4ed
+        //Version 4: f5f5f5
+
+        private static readonly Color COLOR_FONDO = ColorTranslator.FromHtml("#2b2633");
+
+        // ===== COLOR DE LA LETRA (cámbialo aquí) =====
+        private static readonly Color COLOR_TEXTO = ColorTranslator.FromHtml("#F5F0FF");
+        private static readonly Color COLOR_ERROR = ColorTranslator.FromHtml("#FF8A8A");
 
         // Asientos de la mesa
         private const int ABAJO = 0;
@@ -201,7 +210,7 @@ namespace uno
             etiqueta.Size = tamano;
             etiqueta.UseCompatibleTextRendering = true;   // necesario para fuentes cargadas desde archivo
             etiqueta.Font = Fuente(tamanoLetra);
-            etiqueta.ForeColor = Tema.Texto;
+            etiqueta.ForeColor = COLOR_TEXTO;              // <-- color de todos los textos
             etiqueta.BackColor = Color.Transparent;
             etiqueta.TextAlign = ContentAlignment.MiddleLeft;
             Controls.Add(etiqueta);
@@ -276,12 +285,12 @@ namespace uno
             if (mensajeError != null)
             {
                 lblMensaje.Text = mensajeError;
-                lblMensaje.ForeColor = Color.Firebrick;
+                lblMensaje.ForeColor = COLOR_ERROR;
                 mensajeError = null;
             }
             else
             {
-                lblMensaje.ForeColor = Tema.Texto;
+                lblMensaje.ForeColor = COLOR_TEXTO;
                 if (juego.RondaTerminada && !juego.PartidaTerminada)
                     lblMensaje.Text = "Terminó la ronda. Da clic en \"Siguiente ronda\" para continuar.";
                 else
@@ -644,7 +653,7 @@ namespace uno
                 boton.FlatStyle = FlatStyle.Flat;
                 boton.FlatAppearance.BorderSize = 0;
                 boton.BackColor = ColorDibujo(colorBoton);
-                boton.ForeColor = Tema.Texto;
+                boton.ForeColor = Tema.Texto;            // letra oscura sobre botón pastel
                 boton.UseCompatibleTextRendering = true;
                 boton.Font = Fuente(10);
                 boton.Click += (s, e) =>
