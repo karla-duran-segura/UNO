@@ -104,6 +104,7 @@
     <Compile Include="FormJuego.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="RegistradorLog.cs" />
     <Compile Include="TarjetaJugador.cs">
       <SubType>Component</SubType>
     </Compile>

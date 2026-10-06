@@ -98,7 +98,8 @@ namespace uno
 			return id_partida;
 		}
  
-		// Tipo: "JUGAR", "ROBAR", "UNO", o "CASTIGO_UNO"
+		// Tipo: "JUGAR", "ROBAR", "PASAR", "UNO", "CASTIGO_UNO", "ACEPTAR_MAS4", "DESAFIAR_MAS4" o "COLOR_INICIAL"
+		// (la columna tipo admite hasta 20 caracteres)
 		public void RegistrarMovimiento(int id_partida, int id_jugador, string tipo, string carta = null, string color_elegido = null)
 		{
 			int turno;

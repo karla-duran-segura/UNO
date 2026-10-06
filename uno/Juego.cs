@@ -19,6 +19,15 @@ namespace uno
         }
     }
 
+    // Describe una acción para que otras clases (p. ej. RegistradorLog) la reciban.
+    public class MovimientoJuego
+    {
+        public JugadorUno Jugador { get; set; }
+        public string Tipo { get; set; }          // JUGAR, ROBAR, PASAR, UNO, CASTIGO_UNO, ACEPTAR_MAS4, DESAFIAR_MAS4, COLOR_INICIAL
+        public Carta Carta { get; set; }
+        public string ColorElegido { get; set; }
+    }
+
     public class Juego
     {
         private readonly Random azar = new Random();
@@ -50,6 +59,16 @@ namespace uno
         public JugadorUno GanadorPartida { get; private set; }
         public bool EsperandoDesafioMas4 { get { return jugadorMas4 >= 0; } }
         public bool FaltaUnoPendiente { get { return jugadorSinUno >= 0; } }
+
+        public event Action<MovimientoJuego> MovimientoRealizado;
+        public event Action PartidaFinalizada;
+
+        private void Notificar(JugadorUno jugador, string tipo, Carta carta = null, string color = null)
+        {
+            var manejador = MovimientoRealizado;
+            if (manejador != null)
+                manejador(new MovimientoJuego { Jugador = jugador, Tipo = tipo, Carta = carta, ColorElegido = color });
+        }
 
         public Juego(IEnumerable<string> nombres)
         {
@@ -129,6 +148,7 @@ namespace uno
             ValidarColor(color);
             ColorActivo = color;
             Registrar(JugadorActual.Nombre + " elige " + color + " para la carta inicial.");
+            Notificar(JugadorActual, "COLOR_INICIAL", null, color);
         }
 
         public bool PuedeJugar(Carta carta)
@@ -161,12 +181,17 @@ namespace uno
             ColorActivo = carta.EsComodin() ? colorElegido : carta.Color;
             Registrar(Jugadores[autor].Nombre + " juega " + carta.Texto() +
                      (carta.EsComodin() ? " y elige " + ColorActivo : ""));
+            Notificar(Jugadores[autor], "JUGAR", carta, carta.EsComodin() ? ColorActivo : null);
             roboEnTurno = false;
             cartaRobadaEnTurno = null;
 
             if (Jugadores[autor].Mano.Count == 1)
             {
-                if (decirUno) Registrar(Jugadores[autor].Nombre + " dice UNO.");
+                if (decirUno)
+                {
+                    Registrar(Jugadores[autor].Nombre + " dice UNO.");
+                    Notificar(Jugadores[autor], "UNO");
+                }
                 else jugadorSinUno = autor;
             }
 
@@ -208,6 +233,7 @@ namespace uno
             cartaRobadaEnTurno = RobarUna(JugadorActual);
             roboEnTurno = true;
             Registrar(JugadorActual.Nombre + " roba una carta.");
+            Notificar(JugadorActual, "ROBAR");
             // Si ya no hay cartas disponibles, se permite pasar.
             return cartaRobadaEnTurno;
         }
@@ -219,6 +245,7 @@ namespace uno
             roboEnTurno = false;
             cartaRobadaEnTurno = null;
             Registrar(JugadorActual.Nombre + " termina su turno.");
+            Notificar(JugadorActual, "PASAR");
             indiceActual = IndiceDesde(indiceActual, direccion);
         }
 
@@ -228,6 +255,7 @@ namespace uno
             var infractor = Jugadores[jugadorSinUno];
             RobarVarias(infractor, 2);
             Registrar(infractor.Nombre + " no dijo UNO y roba 2.");
+            Notificar(infractor, "CASTIGO_UNO");
             jugadorSinUno = -1;
         }
 
@@ -238,6 +266,7 @@ namespace uno
             CerrarVentanaUno();
             int afectado = jugadorMas4;
             int autor = jugadorDesafiado;
+            Notificar(Jugadores[afectado], desafiar ? "DESAFIAR_MAS4" : "ACEPTAR_MAS4");
             if (desafiar && mas4Ilegal)
             {
                 RobarVarias(Jugadores[autor], 4);
@@ -357,6 +386,8 @@ namespace uno
                 PartidaTerminada = true;
                 GanadorPartida = Jugadores[ganador];
                 Registrar(GanadorPartida.Nombre + " gana la partida.");
+                var fin = PartidaFinalizada;
+                if (fin != null) fin();
             }
         }
 
