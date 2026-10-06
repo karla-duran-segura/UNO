@@ -228,6 +228,7 @@ namespace uno
             boton.Size = new Size(200, 36);
             boton.ColorInicio = COLOR_BOTONES;   // mismo color en los dos lados = color liso
             boton.ColorFin = COLOR_BOTONES;
+            boton.ColorLetra = Color.Black;      // letra negra solo en estos botones
             Controls.Add(boton);
             return boton;
         }

@@ -122,9 +122,10 @@ namespace uno
         private bool presionado;
         private bool principal = true;
 
-        // Colores opcionales del degradado. Si están vacíos, se usan los del tema (morado → rosa).
+        // Colores opcionales. Si están vacíos, se usan los del tema.
         private Color colorInicio = Color.Empty;
         private Color colorFin = Color.Empty;
+        private Color colorLetra = Color.Empty;
 
         public BotonPastel()
         {
@@ -147,6 +148,9 @@ namespace uno
 
         [DefaultValue(typeof(Color), ""), Description("Color derecho del degradado. Vacío = rosa del tema.")]
         public Color ColorFin { get { return colorFin; } set { colorFin = value; Invalidate(); } }
+
+        [DefaultValue(typeof(Color), ""), Description("Color de la letra del botón activo. Vacío = blanco.")]
+        public Color ColorLetra { get { return colorLetra; } set { colorLetra = value; Invalidate(); } }
 
         protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { hover = false; presionado = false; Invalidate(); base.OnMouseLeave(e); }
@@ -195,7 +199,7 @@ namespace uno
                     using (var p = Tema.Redondeado(r, radio))
                     using (var b = new LinearGradientBrush(r, c1, c2, 0f))
                         g.FillPath(b, p);
-                    colorTexto = Color.White;
+                    colorTexto = colorLetra.IsEmpty ? Color.White : colorLetra;
                 }
                 else
                 {
