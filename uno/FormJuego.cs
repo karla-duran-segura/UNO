@@ -529,7 +529,8 @@ namespace uno
             {
                 resultadoGuardado = true;
                 GuardarResultado();
-                MessageBox.Show("¡" + juego.GanadorPartida.Nombre + " ganó la partida!", "Fin de la partida");
+                FormFinal pantallaFinal = new FormFinal(juego);
+                pantallaFinal.ShowDialog(this);
             }
         }
         private void CambioDeTurno()
