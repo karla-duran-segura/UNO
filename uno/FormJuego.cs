@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -46,13 +46,16 @@ using System.Windows.Forms;
     carta.NombreImagen() (ej. rosa_5.png). Si no existe, prueba los nombres
     viejos (rojo_ / verde_).
   - CrearProvisional(): si no hay imagen, dibuja una carta con su texto.
+  - ObtenerTitulo(): carga el logo decorativo del juego desde Decoracion\uno_titulo.png.
 
   FUENTE (Fredoka)
-  - Se carga desde Fuentes\Fredoka-Light.ttf con PrivateFontCollection,
-    así funciona en cualquier compu sin instalarla.
-  - UseCompatibleTextRendering = true: sin eso, las etiquetas no pueden
-    dibujar fuentes cargadas desde archivo.
-  - Si no encuentra el archivo, usa Segoe UI para que el juego no truene.
+  - Datos de jugadores y texto normal: Fredoka Regular.
+  - Texto secundario: Fredoka Medium.
+  - Títulos y botones: Fredoka SemiBold.
+  - Ambas se cargan desde la carpeta Fuentes con PrivateFontCollection.
+  - Las etiquetas usan LabelCute para dibujar el texto con AntiAliasGridFit
+    y evitar el aspecto pixelado típico de algunos Labels de WinForms.
+  - Si no encuentra los archivos, usa Segoe UI como respaldo.
 
   BASE DE DATOS (log)
   - bd.CrearPartida(ids)            -> al empezar; regresa idPartida.
@@ -92,20 +95,34 @@ namespace uno
         private const int ALTO_MINI = 90;
 
         private const string CARPETA_IMAGENES = "Imagenes_pastel";
-        private const string ARCHIVO_FUENTE = "Fredoka-Light.ttf"; 
-        private const bool MOSTRAR_CARTAS_RIVALES = true;   
-        private static readonly Color COLOR_FONDO = ColorTranslator.FromHtml("#2b2633");
-        private static readonly Color COLOR_TEXTO = ColorTranslator.FromHtml("#F5F0FF");
-        private static readonly Color COLOR_ERROR = ColorTranslator.FromHtml("#FF8A8A");
-        private static readonly Color COLOR_BOTONES = ColorTranslator.FromHtml("#5ED6A8");
+        private const string CARPETA_DECORACION = "Decoracion";
+        private const string ARCHIVO_TITULO = "uno_titulo.png";
+        private const string FUENTE_REGULAR = "Fredoka-Regular.ttf";
+        private const string FUENTE_MEDIUM = "Fredoka-Medium.ttf";
+        private const string FUENTE_SEMIBOLD = "Fredoka-SemiBold.ttf";
+        private const bool MOSTRAR_CARTAS_RIVALES = true;
+
+        // Paleta lavanda medio oscuro, elegante y más contrastante
+        private static readonly Color COLOR_FONDO = ColorTranslator.FromHtml("#846874");
+        private static readonly Color COLOR_TEXTO = ColorTranslator.FromHtml("#FFF7FC");
+        private static readonly Color COLOR_TEXTO_SUAVE = ColorTranslator.FromHtml("#E9DDF3");
+        private static readonly Color COLOR_ERROR = ColorTranslator.FromHtml("#FFB0C8");
+        private static readonly Color COLOR_BOTON_INICIO = ColorTranslator.FromHtml("#F7C8DE");
+        private static readonly Color COLOR_BOTON_FIN = ColorTranslator.FromHtml("#D8CCFF");
+        private static readonly Color COLOR_TEXTO_BOTON = ColorTranslator.FromHtml("#4B3B5B");
+        private static readonly Color COLOR_JUGABLE = ColorTranslator.FromHtml("#FFF0AF");
 
         private const int ABAJO = 0;
         private const int IZQUIERDA = 1;
         private const int ARRIBA = 2;
         private const int DERECHA = 3;
 
-        private static PrivateFontCollection fuentes = null;
-        private static FontFamily familiaFredoka = null;
+        private static PrivateFontCollection fuentesRegular = null;
+        private static PrivateFontCollection fuentesMedium = null;
+        private static PrivateFontCollection fuentesSemiBold = null;
+        private static FontFamily familiaFredokaRegular = null;
+        private static FontFamily familiaFredokaMedium = null;
+        private static FontFamily familiaFredokaSemiBold = null;
         private Juego juego;
         private BaseDatos bd = new BaseDatos();
         private List<int> idsJugadores = new List<int>();
@@ -119,9 +136,10 @@ namespace uno
         private Dictionary<string, Image> imagenes = new Dictionary<string, Image>();
         private List<Control> cartasEnMesa = new List<Control>();
 
-        private Label lblInfo;
+        private LabelCute lblInfo;
         private Label lblSentido;
         private Label[] lblAsientos = new Label[4];
+        private LabelCute lblTitulo;
         private PictureBox picMazo;
         private PictureBox picDescarte;
         private PictureBox picColor;
@@ -140,6 +158,7 @@ namespace uno
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             DoubleBuffered = true;
+            AutoScaleMode = AutoScaleMode.Dpi;
             BackColor = COLOR_FONDO;
             Font = Fuente(10);
 
@@ -147,28 +166,107 @@ namespace uno
             IniciarPartida(jugadores);
         }
 
+        private FontFamily CargarFamilia(
+            string nombreArchivo,
+            ref PrivateFontCollection coleccion,
+            ref FontFamily familia)
+        {
+            if (familia != null)
+                return familia;
+
+            string ruta = Path.Combine(
+                Application.StartupPath,
+                "Fuentes",
+                nombreArchivo
+            );
+
+            if (!File.Exists(ruta))
+                return null;
+
+            coleccion = new PrivateFontCollection();
+            coleccion.AddFontFile(ruta);
+
+            if (coleccion.Families.Length > 0)
+                familia = coleccion.Families[0];
+
+            return familia;
+        }
+
+        // Texto normal y datos de jugadores: Fredoka Regular
         private Font Fuente(float tamano)
         {
-            if (familiaFredoka == null)
-            {
-                string ruta = Path.Combine(Application.StartupPath, "Fuentes", ARCHIVO_FUENTE);
-                if (File.Exists(ruta))
-                {
-                    fuentes = new PrivateFontCollection();
-                    fuentes.AddFontFile(ruta);
-                    familiaFredoka = fuentes.Families[0];
-                }
-            }
+            FontFamily familia = CargarFamilia(
+                FUENTE_REGULAR,
+                ref fuentesRegular,
+                ref familiaFredokaRegular
+            );
 
-            if (familiaFredoka != null)
-                return new Font(familiaFredoka, tamano, FontStyle.Regular);
+            if (familia != null)
+                return new Font(
+                    familia,
+                    tamano,
+                    FontStyle.Regular,
+                    GraphicsUnit.Point
+                );
 
-            Font instalada = new Font("Fredoka", tamano, FontStyle.Regular);
-            if (instalada.Name == "Fredoka")
-                return instalada;
+            return new Font(
+                "Segoe UI",
+                tamano,
+                FontStyle.Regular,
+                GraphicsUnit.Point
+            );
+        }
 
-            instalada.Dispose();
-            return new Font("Segoe UI Semibold", tamano, FontStyle.Regular);
+        // Texto secundario un poquito más marcado: Fredoka Medium
+        private Font FuenteMedia(float tamano)
+        {
+            FontFamily familia = CargarFamilia(
+                FUENTE_MEDIUM,
+                ref fuentesMedium,
+                ref familiaFredokaMedium
+            );
+
+            if (familia != null)
+                return new Font(
+                    familia,
+                    tamano,
+                    FontStyle.Regular,
+                    GraphicsUnit.Point
+                );
+
+            return Fuente(tamano);
+        }
+
+        // Títulos y botones: Fredoka SemiBold
+        private Font FuenteTitulo(float tamano)
+        {
+            FontFamily familia = CargarFamilia(
+                FUENTE_SEMIBOLD,
+                ref fuentesSemiBold,
+                ref familiaFredokaSemiBold
+            );
+
+            if (familia != null)
+                return new Font(
+                    familia,
+                    tamano,
+                    FontStyle.Regular,
+                    GraphicsUnit.Point
+                );
+
+            return new Font(
+                "Segoe UI Semibold",
+                tamano,
+                FontStyle.Regular,
+                GraphicsUnit.Point
+            );
+        }
+
+        // Fondo liso, suave y pastel.
+        // Se eligió un lavanda clarito para que combine con el logo y las cartas.
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            e.Graphics.Clear(COLOR_FONDO);
         }
 
         //Inicio de la partida
@@ -201,17 +299,62 @@ namespace uno
         // Construir la interfaz
         private void CrearControles()
         {
-            lblInfo = CrearEtiqueta(new Point(20, 10), new Size(300, 56), 13);
-            lblInfo.TextAlign = ContentAlignment.TopLeft;
+            lblTitulo = CrearEtiqueta(
+    new Point(20, 8),
+    new Size(390, 90),
+    44
+);
 
-            lblSentido = CrearEtiqueta(new Point(900, 10), new Size(280, 30), 12);
+            lblTitulo.Text = "UNO";
+
+            lblTitulo.Font = FuenteTitulo(44);
+
+            lblTitulo.ForeColor =
+                ColorTranslator.FromHtml("#FFD6E8");
+
+            lblTitulo.TextAlign =
+                ContentAlignment.MiddleLeft;
+
+            lblTitulo.UsarSombra = true;
+
+            lblTitulo.ColorSombra =
+                Color.FromArgb(
+                    95,
+                    47,
+                    34,
+                    61
+                );
+
+            lblTitulo.DesplazamientoSombra =
+                new Point(4, 5);
+
+            lblTitulo.UsarContorno = true;
+
+            lblTitulo.ColorContorno =
+                Color.White;
+
+            lblTitulo.GrosorContorno = 7f;
+
+            lblInfo = CrearEtiqueta(new Point(24, 92), new Size(320, 58), 15);
+            lblInfo.Font = FuenteTitulo(15);
+            lblInfo.ForeColor = COLOR_TEXTO;
+            lblInfo.TextAlign = ContentAlignment.TopLeft;
+            lblInfo.UsarSombra = false;
+
+            lblSentido = CrearEtiqueta(new Point(955, 16), new Size(220, 26), 10);
+            lblSentido.Font = FuenteMedia(10);
+            lblSentido.ForeColor = COLOR_TEXTO_SUAVE;
             lblSentido.TextAlign = ContentAlignment.TopRight;
 
-            lblAsientos[ABAJO] = CrearEtiqueta(new Point(150, 428), new Size(600, 26), 12);
-            lblAsientos[IZQUIERDA] = CrearEtiqueta(new Point(20, 145), new Size(220, 26), 11);
-            lblAsientos[ARRIBA] = CrearEtiqueta(new Point(330, 12), new Size(540, 26), 11);
+            lblAsientos[ABAJO] = CrearEtiqueta(new Point(150, 428), new Size(620, 30), 11);
+            lblAsientos[ABAJO].ForeColor = COLOR_TEXTO;
+            lblAsientos[IZQUIERDA] = CrearEtiqueta(new Point(20, 145), new Size(220, 28), 10);
+            lblAsientos[IZQUIERDA].ForeColor = COLOR_TEXTO_SUAVE;
+            lblAsientos[ARRIBA] = CrearEtiqueta(new Point(330, 12), new Size(540, 28), 10);
+            lblAsientos[ARRIBA].ForeColor = COLOR_TEXTO_SUAVE;
             lblAsientos[ARRIBA].TextAlign = ContentAlignment.MiddleCenter;
-            lblAsientos[DERECHA] = CrearEtiqueta(new Point(960, 145), new Size(220, 26), 11);
+            lblAsientos[DERECHA] = CrearEtiqueta(new Point(960, 145), new Size(220, 28), 10);
+            lblAsientos[DERECHA].ForeColor = COLOR_TEXTO_SUAVE;
             lblAsientos[DERECHA].TextAlign = ContentAlignment.MiddleRight;
 
             picMazo = new PictureBox();
@@ -237,34 +380,42 @@ namespace uno
             Controls.Add(picColor);
 
             lblColor = CrearEtiqueta(new Point(630, 322), new Size(120, 24), 10);
+            lblColor.Font = FuenteMedia(10);
+            lblColor.ForeColor = COLOR_TEXTO;
             lblColor.TextAlign = ContentAlignment.MiddleCenter;
 
-            btnUno = CrearBoton("¡UNO!", new Point(790, 205));
+            btnUno = CrearBoton("¡UNO!", new Point(790, 204));
             btnUno.Click += ClickUno;
 
-            btnPasar = CrearBoton("Pasar (después de robar)", new Point(790, 247));
+            btnPasar = CrearBoton("Pasar (después de robar)", new Point(790, 250));
             btnPasar.Click += ClickPasar;
 
-            btnFaltaUno = CrearBoton("¡Señalar falta de UNO!", new Point(790, 289));
+            btnFaltaUno = CrearBoton("¡Señalar falta de UNO!", new Point(790, 296));
             btnFaltaUno.Click += ClickFaltaUno;
 
-            btnSiguienteRonda = CrearBoton("Siguiente ronda", new Point(790, 331));
+            btnSiguienteRonda = CrearBoton("Siguiente ronda", new Point(790, 342));
             btnSiguienteRonda.Click += ClickSiguienteRonda;
 
-            lblMensaje = CrearEtiqueta(new Point(150, 392), new Size(900, 30), 11);
+            lblMensaje = CrearEtiqueta(new Point(150, 392), new Size(900, 30), 10);
+            lblMensaje.Font = FuenteMedia(10);
             lblMensaje.TextAlign = ContentAlignment.MiddleCenter;
+
+            lblTitulo.BringToFront();
+            lblInfo.BringToFront();
+            lblSentido.BringToFront();
         }
 
-        private Label CrearEtiqueta(Point posicion, Size tamano, int tamanoLetra)
+        private LabelCute CrearEtiqueta(Point posicion, Size tamano, int tamanoLetra)
         {
-            Label etiqueta = new Label();
+            LabelCute etiqueta = new LabelCute();
+
             etiqueta.Location = posicion;
             etiqueta.Size = tamano;
-            etiqueta.UseCompatibleTextRendering = true;
             etiqueta.Font = Fuente(tamanoLetra);
             etiqueta.ForeColor = COLOR_TEXTO;
             etiqueta.BackColor = Color.Transparent;
             etiqueta.TextAlign = ContentAlignment.MiddleLeft;
+
             Controls.Add(etiqueta);
             return etiqueta;
         }
@@ -273,14 +424,43 @@ namespace uno
         {
             BotonPastel boton = new BotonPastel();
             boton.Text = texto;
-            boton.Font = Fuente(10);
+            boton.Font = FuenteTitulo(10);
             boton.Location = posicion;
-            boton.Size = new Size(200, 36);
-            boton.ColorInicio = COLOR_BOTONES;
-            boton.ColorFin = COLOR_BOTONES;
-            boton.ColorLetra = Color.Black;
+            boton.Size = new Size(215, 38);
+            boton.ColorInicio = COLOR_BOTON_INICIO;
+            boton.ColorFin = COLOR_BOTON_FIN;
+            boton.ColorLetra = COLOR_TEXTO_BOTON;
             Controls.Add(boton);
             return boton;
+        }
+
+        private Image ObtenerTitulo()
+        {
+            return CrearTituloProvisional();
+        }
+
+        private Image CrearTituloProvisional()
+        {
+            Bitmap imagen = new Bitmap(800, 180);
+
+            using (Graphics g = Graphics.FromImage(imagen))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+                g.Clear(Color.Transparent);
+
+                FontFamily familia = familiaFredokaSemiBold;
+                if (familia == null)
+                    familia = FontFamily.GenericSansSerif;
+
+                using (Font fuente = new Font(familia, 60, FontStyle.Regular, GraphicsUnit.Point))
+                using (SolidBrush brocha = new SolidBrush(ColorTranslator.FromHtml("#FFE7F2")))
+                {
+                    g.DrawString("UNO", fuente, brocha, new PointF(20, 20));
+                }
+            }
+
+            return imagen;
         }
 
         //Volver a dibujar la pantalla después de cada acción
@@ -426,7 +606,7 @@ namespace uno
                 if (sePuede)
                 {
                     pb.Padding = new Padding(3);
-                    pb.BackColor = Color.Gold;
+                    pb.BackColor = COLOR_JUGABLE;
                 }
 
                 Carta cartaClic = carta;
@@ -485,7 +665,7 @@ namespace uno
                 Point[] puntos = { new Point(40, 2), new Point(78, 40), new Point(40, 78), new Point(2, 40) };
                 using (SolidBrush brocha = new SolidBrush(color))
                     g.FillPolygon(brocha, puntos);
-                using (Pen borde = new Pen(Color.White, 3))
+                using (Pen borde = new Pen(COLOR_TEXTO, 3))
                     g.DrawPolygon(borde, puntos);
             }
             return imagen;
@@ -697,9 +877,9 @@ namespace uno
                 boton.FlatStyle = FlatStyle.Flat;
                 boton.FlatAppearance.BorderSize = 0;
                 boton.BackColor = ColorDibujo(colorBoton);
-                boton.ForeColor = Tema.Texto;         
+                boton.ForeColor = COLOR_TEXTO_BOTON;         
                 boton.UseCompatibleTextRendering = true;
-                boton.Font = Fuente(10);
+                boton.Font = FuenteTitulo(10);
                 boton.Click += (s, e) =>
                 {
                     elegido = colorBoton;

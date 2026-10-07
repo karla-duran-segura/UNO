@@ -104,6 +104,14 @@
     <Compile Include="FormJuego.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="ImagenesCartas.cs" />
+    <Compile Include="LabelCute.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="obj\Debug\.NETFramework,Version=v4.7.2.AssemblyAttributes.cs" />
+    <Compile Include="PanelCute.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="RegistradorLog.cs" />
     <Compile Include="TarjetaJugador.cs">
       <SubType>Component</SubType>
@@ -127,7 +135,98 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="obj\Debug\uno.csproj.FileListAbsolute.txt" />
+    <Content Include="obj\Debug\uno.exe" />
+    <Content Include="obj\Debug\uno.pdb" />
     <None Include="App.config" />
+    <Content Include="bin\Debug\BouncyCastle.Cryptography.dll" />
+    <Content Include="bin\Debug\BouncyCastle.Cryptography.xml" />
+    <Content Include="bin\Debug\Google.Protobuf.dll" />
+    <Content Include="bin\Debug\Google.Protobuf.pdb" />
+    <Content Include="bin\Debug\Google.Protobuf.xml" />
+    <Content Include="bin\Debug\Imagenes_pastel\amarillo_0.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\amarillo_1.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\amarillo_2.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\amarillo_3.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\amarillo_4.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\amarillo_5.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\amarillo_6.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\amarillo_7.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\amarillo_8.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\amarillo_9.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\amarillo_mas2.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\amarillo_reversa.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\amarillo_salta.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\azul_0.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\azul_1.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\azul_2.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\azul_3.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\azul_4.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\azul_5.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\azul_6.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\azul_7.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\azul_8.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\azul_9.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\azul_mas2.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\azul_reversa.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\azul_salta.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\comodin.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\mas4.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\rojo_0.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\rojo_1.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\rojo_2.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\rojo_3.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\rojo_4.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\rojo_5.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\rojo_6.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\rojo_7.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\rojo_8.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\rojo_9.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\rojo_mas2.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\rojo_reversa.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\rojo_salta.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\verde_0.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\verde_1.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\verde_2.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\verde_3.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\verde_4.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\verde_5.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\verde_6.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\verde_7.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\verde_8.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\verde_9.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\verde_mas2.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\verde_reversa.png" />
+    <Content Include="bin\Debug\Imagenes_pastel\verde_salta.png" />
+    <Content Include="bin\Debug\K4os.Compression.LZ4.dll" />
+    <Content Include="bin\Debug\K4os.Compression.LZ4.Streams.dll" />
+    <Content Include="bin\Debug\K4os.Compression.LZ4.Streams.xml" />
+    <Content Include="bin\Debug\K4os.Compression.LZ4.xml" />
+    <Content Include="bin\Debug\K4os.Hash.xxHash.dll" />
+    <Content Include="bin\Debug\K4os.Hash.xxHash.xml" />
+    <Content Include="bin\Debug\MySql.Data.dll" />
+    <Content Include="bin\Debug\MySql.Data.xml" />
+    <Content Include="bin\Debug\Newtonsoft.Json.dll" />
+    <Content Include="bin\Debug\Newtonsoft.Json.xml" />
+    <Content Include="bin\Debug\System.Buffers.dll" />
+    <Content Include="bin\Debug\System.Buffers.xml" />
+    <Content Include="bin\Debug\System.Configuration.ConfigurationManager.dll" />
+    <Content Include="bin\Debug\System.Configuration.ConfigurationManager.xml" />
+    <Content Include="bin\Debug\System.IO.Pipelines.dll" />
+    <Content Include="bin\Debug\System.IO.Pipelines.xml" />
+    <Content Include="bin\Debug\System.Memory.dll" />
+    <Content Include="bin\Debug\System.Memory.xml" />
+    <Content Include="bin\Debug\System.Numerics.Vectors.dll" />
+    <Content Include="bin\Debug\System.Numerics.Vectors.xml" />
+    <Content Include="bin\Debug\System.Runtime.CompilerServices.Unsafe.dll" />
+    <Content Include="bin\Debug\System.Runtime.CompilerServices.Unsafe.xml" />
+    <Content Include="bin\Debug\System.Threading.Tasks.Extensions.dll" />
+    <Content Include="bin\Debug\System.Threading.Tasks.Extensions.xml" />
+    <Content Include="bin\Debug\uno.exe" />
+    <Content Include="bin\Debug\uno.pdb" />
+    <Content Include="bin\Debug\ZstdSharp.dll" />
+    <Content Include="Database\uno_db.sql" />
+    <Content Include="Decoracion\uno_titulo.png" />
     <Content Include="Fuentes\Fredoka-SemiBold.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -137,6 +236,15 @@
     <Content Include="Fuentes\Fredoka-Light.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <None Include="bin\Debug\Fuentes\Fredoka-Light.ttf" />
+    <None Include="bin\Debug\Fuentes\Fredoka-Regular.ttf" />
+    <None Include="bin\Debug\Fuentes\Fredoka-SemiBold.ttf" />
+    <None Include="bin\Debug\uno.exe.config" />
+    <None Include="obj\Debug\DesignTimeResolveAssemblyReferencesInput.cache" />
+    <None Include="obj\Debug\uno.csproj.AssemblyReference.cache" />
+    <None Include="obj\Debug\uno.csproj.CoreCompileInputs.cache" />
+    <None Include="obj\Debug\uno.csproj.GenerateResource.cache" />
+    <None Include="obj\Debug\uno.csproj.Up2Date" />
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
@@ -148,6 +256,11 @@
     <EmbeddedResource Include="Form1.resx">
       <DependentUpon>Form1.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="obj\Debug\uno.FormInicio.resources" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Imagenes\" />
+    <Folder Include="obj\Debug\TempPE\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
