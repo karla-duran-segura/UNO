@@ -103,7 +103,7 @@ namespace uno
         private const bool MOSTRAR_CARTAS_RIVALES = true;
 
         // Paleta lavanda medio oscuro, elegante y más contrastante
-        private static readonly Color COLOR_FONDO = ColorTranslator.FromHtml("#846874");
+        private static readonly Color COLOR_FONDO = ColorTranslator.FromHtml("#7C6884"); //("#846874"); 
         private static readonly Color COLOR_TEXTO = ColorTranslator.FromHtml("#FFF7FC");
         private static readonly Color COLOR_TEXTO_SUAVE = ColorTranslator.FromHtml("#E9DDF3");
         private static readonly Color COLOR_ERROR = ColorTranslator.FromHtml("#FFB0C8");
