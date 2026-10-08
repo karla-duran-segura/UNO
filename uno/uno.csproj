@@ -101,6 +101,9 @@
     <Compile Include="BotonPastel.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="FormFinal.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="FormJuego.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -109,9 +112,6 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="obj\Debug\.NETFramework,Version=v4.7.2.AssemblyAttributes.cs" />
-    <Compile Include="PanelCute.cs">
-      <SubType>Component</SubType>
-    </Compile>
     <Compile Include="RegistradorLog.cs" />
     <Compile Include="TarjetaJugador.cs">
       <SubType>Component</SubType>
