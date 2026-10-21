@@ -44,9 +44,10 @@ namespace uno
             if (Cache.TryGetValue(clave, out imagen))
                 return imagen;
 
-            string ruta = Path.Combine(CarpetaImagenes, "dorso.png");
+            // FormJuego usaba "reverso.png"; se acepta también ese nombre
+            string ruta = BuscarRuta("dorso.png") ?? BuscarRuta("reverso.png");
 
-            imagen = File.Exists(ruta)
+            imagen = ruta != null
                 ? CargarSinBloquearArchivo(ruta)
                 : CrearDorsoPastel();
 
@@ -85,14 +86,28 @@ namespace uno
             if (Cache.TryGetValue(nombreArchivo, out imagen))
                 return imagen;
 
-            string ruta = Path.Combine(CarpetaImagenes, nombreArchivo);
+            string ruta = BuscarRuta(nombreArchivo);
 
-            imagen = File.Exists(ruta)
+            imagen = ruta != null
                 ? CargarSinBloquearArchivo(ruta)
                 : CrearPlaceholder(textoCarta);
 
             Cache[nombreArchivo] = imagen;
             return imagen;
+        }
+
+        // Busca el archivo en la carpeta de imágenes. Si no está, prueba los nombres
+        // viejos del mazo (rojo_ / verde_ en lugar de rosa_ / morado_), como hacía FormJuego.
+        // Devuelve null si no existe ninguno.
+        private static string BuscarRuta(string nombreArchivo)
+        {
+            string ruta = Path.Combine(CarpetaImagenes, nombreArchivo);
+            if (File.Exists(ruta))
+                return ruta;
+
+            string alterno = nombreArchivo.Replace("rosa_", "rojo_").Replace("morado_", "verde_");
+            ruta = Path.Combine(CarpetaImagenes, alterno);
+            return File.Exists(ruta) ? ruta : null;
         }
 
         // Carga la imagen en memoria y cierra el archivo inmediatamente.

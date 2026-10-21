@@ -13,18 +13,21 @@ using System.Windows.Forms;
     elegidos (List<JugadorBD>, que trae id y nombre de la base de datos).
   - NO tiene las reglas: las reglas están en Juego.cs (motor). Esta clase
     solo DIBUJA el estado del juego y le MANDA las acciones del usuario.
-  - Además guarda cada movimiento en la BD (log) usando BaseDatos.cs,
-    que llama a la API en Python, y la API guarda en MySQL.
+  - El log en la BD lo hace RegistradorLog (usa BaseDatos.cs, que llama a la
+    API en Python, y la API guarda en MySQL). Esta clase solo lo crea.
+  - Las imágenes de las cartas las carga ImagenesCartas.
 
   FLUJO GENERAL
   1. Constructor: tamaño, colores, fuente -> CrearControles() -> IniciarPartida().
-  2. IniciarPartida(): separa nombres e ids, crea el Juego, reparte si hace
-     falta (IniciarRonda) y crea la partida en la BD (bd.CrearPartida -> idPartida).
+  2. IniciarPartida(): separa los nombres, crea el Juego, reparte si hace
+     falta (IniciarRonda) y arranca RegistradorLog (crea la partida en la BD).
   3. Cada clic -> evento (ClickCarta, ClickMazo...) -> Intentar(acción del motor)
-     -> si salió bien, Registrar(...) en la BD -> DespuesDeAccion().
+     -> DespuesDeAccion(). El log no se llama aquí: RegistradorLog escucha
+     los eventos de Juego y guarda cada movimiento por su cuenta.
   4. DespuesDeAccion(): resuelve lo pendiente (color inicial si sale comodín,
      desafío del +4), detecta cambio de turno, llama Actualizar() y, si
-     terminó la partida, GuardarResultado() una sola vez.
+     terminó la partida, muestra FormFinal (RegistradorLog ya guardó el
+     resultado al recibir el evento PartidaFinalizada).
   5. Actualizar(): borra las cartas de la mesa y las vuelve a dibujar todas
      con el estado actual del juego.
 
@@ -41,11 +44,11 @@ using System.Windows.Forms;
   - DibujarRombo(): dibuja en un Bitmap el rombo del color activo.
 
   IMÁGENES
-  - Cargar(): usa un Dictionary como caché para no leer el disco cada vez.
-  - RutaImagen(): busca en la carpeta Imagenes_pastel con el nombre que da
-    carta.NombreImagen() (ej. rosa_5.png). Si no existe, prueba los nombres
-    viejos (rojo_ / verde_).
-  - CrearProvisional(): si no hay imagen, dibuja una carta con su texto.
+  - ImagenesCartas.Obtener(carta) y ImagenesCartas.ObtenerDorso(): cargan las
+    imágenes, las guardan en caché y, si falta un archivo, dibujan una
+    carta de respaldo. Ahí vive la ruta Imagenes_pastel.
+  - Aquí solo queda el diccionario "imagenes" para las versiones GIRADAS 90°
+    de las cartas de los lados (ver ImagenRival).
   - ObtenerTitulo(): carga el logo decorativo del juego desde Decoracion\uno_titulo.png.
 
   FUENTE (Fredoka)
@@ -58,15 +61,13 @@ using System.Windows.Forms;
   - Si no encuentra los archivos, usa Segoe UI como respaldo.
 
   BASE DE DATOS (log)
-  - bd.CrearPartida(ids)            -> al empezar; regresa idPartida.
-  - bd.RegistrarMovimiento(...)     -> en cada acción. Tipos que se guardan:
-      jugar, robar, pasar, uno, falta_uno, color_inicial,
-      desafio_mas4, acepta_mas4.
-  - bd.RegistrarResultado(...)      -> al final: ganador y cartas restantes.
-  - idsJugadores tiene el id de la BD de cada jugador, en el mismo orden
-    que juego.Jugadores (por eso se usa el mismo índice).
-  - Si la API está apagada, el juego sigue funcionando; AvisarErrorBD()
-    muestra el aviso UNA sola vez (variable avisoBD).
+  - RegistradorLog (se crea en IniciarPartida, solo en Local y Host):
+      Iniciar()                  -> crea la partida en la BD y se suscribe a Juego.
+      juego.MovimientoRealizado  -> bd.RegistrarMovimiento en cada acción.
+      juego.PartidaFinalizada    -> bd.RegistrarResultado (ganador y cartas).
+  - Si algo falla, RegistradorLog guarda el texto en UltimoError y el juego
+    sigue. RevisarLog() lo muestra UNA sola vez (variable avisoBD).
+  - El cliente en red no tiene Juego ni BD: no registra nada.
 
   MANEJO DE ERRORES
   - Intentar(Action): ejecuta una acción del motor dentro de try/catch.
@@ -82,6 +83,22 @@ using System.Windows.Forms;
   - ElegirColor(): ventana modal (ShowDialog). ControlBox = false quita la
     X, así que es obligatorio elegir un color.
 
+  MODO RED (cliente-servidor)
+  - Hay tres modos (enum Modo):
+      Local   -> una sola computadora, como antes (yo controlo los 4 jugadores).
+      Host    -> ESTA computadora tiene el Juego, la BD y las reglas. Controla los
+                 jugadores 0 y 2; el cliente controla el 1 y el 3.
+      Cliente -> NO tiene Juego ni BD. Recibe un EstadoRed (JSON) tras cada acción,
+                 lo dibuja y manda sus clics al anfitrión ("Jugar", "Robar"...).
+  - Todo se dibuja desde "estado" (un EstadoRed), sea Local, Host o Cliente.
+    Actualizar() ya no lee el Juego directamente.
+  - El anfitrión arma una foto distinta para cada computadora: cada una solo
+    recibe las manos de SUS jugadores (de los demás, cuántas cartas tienen).
+  - Los diálogos (color inicial, desafío de +4) los muestra la computadora que
+    controla al jugador que debe decidir: ResolverPendientes().
+  - Solo el anfitrión valida jugadas y guarda el log en la BD.
+  - Conexion.cs manda/recibe; EstadoRed.cs define los datos; FormRed.cs conecta.
+
  */
 
 namespace uno
@@ -89,12 +106,11 @@ namespace uno
     public class FormJuego : Form
     {
         // Tamaños de cartas
-        private const int ANCHO = 105;          
+        private const int ANCHO = 105;
         private const int ALTO = 158;
         private const int ANCHO_MINI = 60;
         private const int ALTO_MINI = 90;
 
-        private const string CARPETA_IMAGENES = "Imagenes_pastel";
         private const string CARPETA_DECORACION = "Decoracion";
         private const string ARCHIVO_TITULO = "uno_titulo.png";
         private const string FUENTE_REGULAR = "Fredoka-Regular.ttf";
@@ -103,7 +119,7 @@ namespace uno
         private const bool MOSTRAR_CARTAS_RIVALES = true;
 
         // Paleta lavanda medio oscuro, elegante y más contrastante
-        private static readonly Color COLOR_FONDO = ColorTranslator.FromHtml("#7C6884");
+        private static readonly Color COLOR_FONDO = ColorTranslator.FromHtml("#7C6884"); //("#846874"); 
         private static readonly Color COLOR_TEXTO = ColorTranslator.FromHtml("#FFF7FC");
         private static readonly Color COLOR_TEXTO_SUAVE = ColorTranslator.FromHtml("#E9DDF3");
         private static readonly Color COLOR_ERROR = ColorTranslator.FromHtml("#FFB0C8");
@@ -123,17 +139,27 @@ namespace uno
         private static FontFamily familiaFredokaRegular = null;
         private static FontFamily familiaFredokaMedium = null;
         private static FontFamily familiaFredokaSemiBold = null;
-        private Juego juego;
-        private BaseDatos bd = new BaseDatos();
-        private List<int> idsJugadores = new List<int>();
-        private int idPartida = -1;
-        private bool resultadoGuardado = false;
+        private enum Modo { Local, Host, Cliente }
+
+        private Modo modo = Modo.Local;
+        private Conexion conexion;                           // solo Host y Cliente
+        private Juego juego;                                 // solo Local y Host (quien tiene las reglas)
+        private BaseDatos bd;                                // solo Local y Host (el cliente no toca la BD)
+        private EstadoRed estado;                            // foto de la partida: de aquí se dibuja todo
+        private List<int> misIndices = new List<int>();      // jugadores que controla ESTA computadora
+        private List<int> indicesRemotos = new List<int>();  // jugadores que controla el cliente (solo Host)
+        private int perspectiva = 0;                         // jugador que se dibuja abajo
+        private int turnoAnterior = -1;
+        private string errorCliente = null;                  // jugada rechazada del cliente; se le avisa en su siguiente Estado
+        private bool cerrando = false;
+        private bool resolviendo = false;
+        private RegistradorLog registrador;                  // solo Local y Host: guarda el log en la BD
+        private bool finMostrado = false;
         private bool avisoBD = false;
         private bool decirUno = false;
         private string mensajeError = null;
-        private JugadorUno jugadorAnterior = null;
 
-        private Dictionary<string, Image> imagenes = new Dictionary<string, Image>();
+        private Dictionary<string, Image> imagenes = new Dictionary<string, Image>();   // solo las versiones giradas
         private List<Control> cartasEnMesa = new List<Control>();
 
         private LabelCute lblInfo;
@@ -150,7 +176,36 @@ namespace uno
         private BotonPastel btnSiguienteRonda;
         private Label lblMensaje;
 
+        // Una sola computadora (como antes)
         public FormJuego(List<JugadorBD> jugadores)
+        {
+            Inicializar();
+            modo = Modo.Local;
+            IniciarPartida(jugadores);
+        }
+
+        // Anfitrión: ya hay un cliente conectado
+        public FormJuego(List<JugadorBD> jugadores, Conexion conexion)
+        {
+            Inicializar();
+            modo = Modo.Host;
+            this.conexion = conexion;
+            Text = "UNO - Partida (anfitrión)";
+            IniciarPartida(jugadores);
+        }
+
+        // Cliente: solo dibuja lo que manda el anfitrión
+        public FormJuego(Conexion conexion)
+        {
+            Inicializar();
+            modo = Modo.Cliente;
+            this.conexion = conexion;
+            Text = "UNO - Partida (cliente)";
+            lblMensaje.Text = "Conectado. Esperando los datos de la partida...";
+            ConectarRed();
+        }
+
+        private void Inicializar()
         {
             Text = "UNO - Partida";
             ClientSize = new Size(1200, 660);
@@ -163,7 +218,14 @@ namespace uno
             Font = Fuente(10);
 
             CrearControles();
-            IniciarPartida(jugadores);
+
+            // El primer diálogo (color inicial) se muestra cuando la ventana ya está a la vista
+            Shown += delegate { ResolverPendientes(); };
+            FormClosing += delegate
+            {
+                cerrando = true;
+                if (conexion != null) conexion.Cerrar();
+            };
         }
 
         private FontFamily CargarFamilia(
@@ -269,30 +331,38 @@ namespace uno
             e.Graphics.Clear(COLOR_FONDO);
         }
 
-        //Inicio de la partida
+        //Inicio de la partida (Local y Host: quien tiene el Juego)
         private void IniciarPartida(List<JugadorBD> jugadores)
         {
             List<string> nombres = new List<string>();
             for (int i = 0; i < jugadores.Count; i++)
             {
                 nombres.Add(jugadores[i].nombre);
-                idsJugadores.Add(jugadores[i].id);
             }
 
             juego = new Juego(nombres);
             if (juego.Jugadores[0].Mano.Count == 0)
                 juego.IniciarRonda();
 
-            try
+            // El log se guarda solo: RegistradorLog escucha los eventos de Juego
+            // (MovimientoRealizado y PartidaFinalizada). Se crea antes de la primera jugada.
+            bd = new BaseDatos();
+            registrador = new RegistradorLog(bd, juego);
+            if (!registrador.Iniciar())
+                AvisarErrorBD(registrador.UltimoError);
+
+            // Reparto de asientos: en red, el anfitrión toma 0 y 2; el cliente 1 y 3
+            for (int i = 0; i < juego.Jugadores.Count; i++)
             {
-                idPartida = bd.CrearPartida(idsJugadores);
-            }
-            catch (Exception ex)
-            {
-                AvisarErrorBD(ex);
+                if (modo == Modo.Host && i % 2 == 1)
+                    indicesRemotos.Add(i);
+                else
+                    misIndices.Add(i);
             }
 
-            jugadorAnterior = juego.JugadorActual;
+            if (modo == Modo.Host)
+                ConectarRed();
+
             DespuesDeAccion();
         }
 
@@ -463,20 +533,29 @@ namespace uno
             return imagen;
         }
 
-        //Volver a dibujar la pantalla después de cada acción
+        //Volver a dibujar la pantalla después de cada acción (siempre desde "estado")
         private void Actualizar()
         {
-            JugadorUno actual = juego.JugadorActual;
-            int indiceActual = IndiceDe(actual);
+            if (estado == null) return;
 
-            if (juego.PartidaTerminada)
-                lblInfo.Text = "¡" + juego.GanadorPartida.Nombre + " ganó\nla partida!";
-            else if (juego.RondaTerminada)
-                lblInfo.Text = "Ronda " + juego.NumeroRonda + "\nTerminó la ronda";
+            EstadoRed e = estado;
+            int total = e.Jugadores.Count;
+            int actual = e.IndiceActual;
+
+            // Mi asiento (abajo): el jugador en turno si es mío; si no, el último mío que estuvo abajo
+            if (EsMio(actual))
+                perspectiva = actual;
+            else if (!EsMio(perspectiva))
+                perspectiva = misIndices.Count > 0 ? misIndices[0] : 0;
+
+            if (e.PartidaTerminada)
+                lblInfo.Text = "¡" + e.GanadorPartida + " ganó\nla partida!";
+            else if (e.RondaTerminada)
+                lblInfo.Text = "Ronda " + e.NumeroRonda + "\nTerminó la ronda";
             else
-                lblInfo.Text = "Ronda " + juego.NumeroRonda + "\nTurno de " + actual.Nombre;
+                lblInfo.Text = "Ronda " + e.NumeroRonda + "\nTurno de " + e.Jugadores[actual].Nombre;
 
-            lblSentido.Text = juego.Direccion >= 0 ? "Sentido: ↻" : "Sentido: ↺";
+            lblSentido.Text = e.Direccion >= 0 ? "Sentido: ↻" : "Sentido: ↺";
 
             // Borrar las cartas dibujadas antes
             for (int i = cartasEnMesa.Count - 1; i >= 0; i--)
@@ -486,12 +565,12 @@ namespace uno
             for (int i = 0; i < 4; i++)
                 lblAsientos[i].Text = "";
 
-            // Rivales
-            int[] asientos = AsientosRivales(juego.Jugadores.Count);
+            // Rivales (en orden de turno a partir de mi asiento)
+            int[] asientos = AsientosRivales(total);
             for (int k = 0; k < asientos.Length; k++)
             {
-                int indice = (indiceActual + k + 1) % juego.Jugadores.Count;
-                JugadorUno rival = juego.Jugadores[indice];
+                int indice = (perspectiva + k + 1) % total;
+                JugadorRed rival = e.Jugadores[indice];
                 lblAsientos[asientos[k]].Text = TextoJugador(rival);
 
                 if (asientos[k] == ARRIBA)
@@ -500,21 +579,22 @@ namespace uno
                     DibujarLado(rival, asientos[k] == IZQUIERDA ? 20 : 1090);
             }
 
-            // Jugador en turno
-            if (!juego.RondaTerminada)
+            // Mi jugador (abajo)
+            if (!e.RondaTerminada)
             {
-                lblAsientos[ABAJO].Text = TextoJugador(actual) + "  ·  tu turno";
-                DibujarMano(actual);
+                JugadorRed yo = e.Jugadores[perspectiva];
+                lblAsientos[ABAJO].Text = TextoJugador(yo) + (perspectiva == actual ? "  ·  tu turno" : "");
+                DibujarMano(yo);
             }
 
             // Centro
-            picMazo.Image = ObtenerReverso();
-            picDescarte.Image = ObtenerImagen(juego.CartaSuperior);
+            picMazo.Image = ImagenesCartas.ObtenerDorso();
+            picDescarte.Image = ImagenesCartas.Obtener(e.CartaSuperior.ACarta());
 
             if (picColor.Image != null)
                 picColor.Image.Dispose();
-            picColor.Image = DibujarRombo(ColorDibujo(juego.ColorActivo));
-            lblColor.Text = juego.ColorActivo == null ? "por elegir" : juego.ColorActivo;
+            picColor.Image = DibujarRombo(ColorDibujo(e.ColorActivo));
+            lblColor.Text = e.ColorActivo == null ? "por elegir" : e.ColorActivo;
 
             // Mensaje
             if (mensajeError != null)
@@ -526,22 +606,27 @@ namespace uno
             else
             {
                 lblMensaje.ForeColor = COLOR_TEXTO;
-                if (juego.RondaTerminada && !juego.PartidaTerminada)
-                    lblMensaje.Text = "Terminó la ronda. Da clic en \"Siguiente ronda\" para continuar.";
+                if (e.RondaTerminada && !e.PartidaTerminada)
+                    lblMensaje.Text = modo == Modo.Cliente
+                        ? "Terminó la ronda. Esperando a que el anfitrión inicie la siguiente."
+                        : "Terminó la ronda. Da clic en \"Siguiente ronda\" para continuar.";
+                else if (!e.RondaTerminada && !EsMio(actual))
+                    lblMensaje.Text = "Esperando a " + e.Jugadores[actual].Nombre + "...";
                 else
                     lblMensaje.Text = "";
             }
 
+            bool miTurno = EsMio(actual);
             btnUno.Text = decirUno ? "¡UNO! ✓" : "¡UNO!";
-            btnUno.Enabled = !juego.RondaTerminada;
-            btnPasar.Enabled = !juego.RondaTerminada;
-            btnFaltaUno.Enabled = juego.FaltaUnoPendiente;
-            btnSiguienteRonda.Enabled = juego.RondaTerminada && !juego.PartidaTerminada;
+            btnUno.Enabled = !e.RondaTerminada && miTurno;
+            btnPasar.Enabled = !e.RondaTerminada && miTurno;
+            btnFaltaUno.Enabled = e.FaltaUnoPendiente;
+            btnSiguienteRonda.Enabled = e.RondaTerminada && !e.PartidaTerminada && modo != Modo.Cliente;
         }
 
-        private string TextoJugador(JugadorUno jugador)
+        private string TextoJugador(JugadorRed jugador)
         {
-            return jugador.Nombre + "  ·  " + jugador.Mano.Count + " cartas  ·  " + jugador.Puntos + " pts";
+            return jugador.Nombre + "  ·  " + jugador.NumCartas + " cartas  ·  " + jugador.Puntos + " pts";
         }
 
         private int[] AsientosRivales(int cantidadJugadores)
@@ -564,31 +649,42 @@ namespace uno
             return pasoNormal;
         }
 
-        private void DibujarArriba(JugadorUno jugador)
+        private void DibujarArriba(JugadorRed jugador)
         {
-            int cantidad = jugador.Mano.Count;
+            int cantidad = jugador.NumCartas;
             int espacio = 540;
             int paso = CalcularPaso(cantidad, espacio, ANCHO_MINI, 38);
             int anchoTotal = (cantidad - 1) * paso + ANCHO_MINI;
             int x = 330 + (espacio - anchoTotal) / 2;
 
             for (int c = 0; c < cantidad; c++)
-                AgregarCarta(ImagenRival(jugador.Mano[c], false), x + c * paso, 42, ANCHO_MINI, ALTO_MINI);
+                AgregarCarta(ImagenRival(CartaVisible(jugador, c), false), x + c * paso, 42, ANCHO_MINI, ALTO_MINI);
         }
-        private void DibujarLado(JugadorUno jugador, int x)
+
+        private void DibujarLado(JugadorRed jugador, int x)
         {
-            int cantidad = jugador.Mano.Count;
+            int cantidad = jugador.NumCartas;
             int espacio = 420;
             int paso = CalcularPaso(cantidad, espacio, ANCHO_MINI, 32);
             int altoTotal = (cantidad - 1) * paso + ANCHO_MINI;
             int y = 178 + (espacio - altoTotal) / 2;
 
             for (int c = 0; c < cantidad; c++)
-                AgregarCarta(ImagenRival(jugador.Mano[c], true), x, y + c * paso, ALTO_MINI, ANCHO_MINI);
+                AgregarCarta(ImagenRival(CartaVisible(jugador, c), true), x, y + c * paso, ALTO_MINI, ANCHO_MINI);
         }
 
-        private void DibujarMano(JugadorUno jugador)
+        // La carta si esa mano se puede ver; null si no (entonces se dibuja el dorso)
+        private Carta CartaVisible(JugadorRed jugador, int posicion)
         {
+            if (!MOSTRAR_CARTAS_RIVALES || jugador.Mano == null)
+                return null;
+            return jugador.Mano[posicion].ACarta();
+        }
+
+        private void DibujarMano(JugadorRed jugador)
+        {
+            if (jugador.Mano == null) return;
+
             int cantidad = jugador.Mano.Count;
             int espacio = 900;
             int paso = CalcularPaso(cantidad, espacio, ANCHO, ANCHO + 6);
@@ -597,11 +693,11 @@ namespace uno
 
             for (int c = 0; c < cantidad; c++)
             {
-                Carta carta = jugador.Mano[c];
-                bool sePuede = juego.PuedeJugar(carta);
+                CartaRed carta = jugador.Mano[c];
+                bool sePuede = carta.Jugable;
                 int y = sePuede ? 458 : 482;
 
-                PictureBox pb = AgregarCarta(ObtenerImagen(carta), x + c * paso, y, ANCHO, ALTO);
+                PictureBox pb = AgregarCarta(ImagenesCartas.Obtener(carta.ACarta()), x + c * paso, y, ANCHO, ALTO);
                 pb.Cursor = Cursors.Hand;
                 if (sePuede)
                 {
@@ -609,8 +705,8 @@ namespace uno
                     pb.BackColor = COLOR_JUGABLE;
                 }
 
-                Carta cartaClic = carta;
-                pb.Click += (s, e) => ClickCarta(cartaClic);
+                int posicion = c;   // copia para el clic (la carta se identifica por su posición en la mano)
+                pb.Click += (s, ev) => ClickCarta(posicion);
             }
         }
 
@@ -628,19 +724,20 @@ namespace uno
             return pb;
         }
 
+        // carta == null -> dorso (mano que no se puede ver)
         private Image ImagenRival(Carta carta, bool acostada)
         {
             string clave;
             Image imagen;
-            if (MOSTRAR_CARTAS_RIVALES)
+            if (carta != null)
             {
                 clave = carta.NombreImagen();
-                imagen = ObtenerImagen(carta);
+                imagen = ImagenesCartas.Obtener(carta);
             }
             else
             {
                 clave = "reverso.png";
-                imagen = ObtenerReverso();
+                imagen = ImagenesCartas.ObtenerDorso();
             }
 
             if (!acostada)
@@ -671,163 +768,406 @@ namespace uno
             return imagen;
         }
 
-        //Despues de cada accion
+        // ---------- Después de cada acción (Local y Host: quien tiene el Juego) ----------
         private void DespuesDeAccion()
         {
-            if (!juego.RondaTerminada && juego.ColorActivo == null)
-            {
-                int indice = IndiceDe(juego.JugadorActual);
-                string color = ElegirColor(juego.JugadorActual.Nombre + ", elige el color inicial");
-                if (Intentar(() => juego.ElegirColorInicial(color)))
-                    Registrar(indice, "color_inicial", null, color);
-            }
+            // 1. Foto nueva de la partida y redibujar
+            estado = ConstruirEstado(misIndices);
+            AplicarEstado();
 
-            // Desafío del +4
-            if (juego.EsperandoDesafioMas4)
-            {
-                int indice = IndiceDe(juego.JugadorActual);
-                DialogResult respuesta = MessageBox.Show(
-                    "Se jugó un +4. ¿El jugador afectado quiere desafiarlo?",
-                    "Desafío de +4", MessageBoxButtons.YesNo);
-                bool desafiar = (respuesta == DialogResult.Yes);
-                if (Intentar(() => juego.ResolverMas4(desafiar)))
-                    Registrar(indice, desafiar ? "desafio_mas4" : "acepta_mas4");
-            }
+            // 2. El anfitrión le manda su foto al cliente
+            if (modo == Modo.Host)
+                EnviarEstadoAlCliente();
 
-            // Cambio de turno
-            if (!juego.RondaTerminada && !Object.ReferenceEquals(juego.JugadorActual, jugadorAnterior))
-            {
-                jugadorAnterior = juego.JugadorActual;
-                decirUno = false;
-                CambioDeTurno();
-            }
+            // 3. ¿Falló el log? (aviso una sola vez)
+            RevisarLog();
 
-            Actualizar();
-
-            // Fin de la partida
-            if (juego.PartidaTerminada && !resultadoGuardado)
+            // 4. Fin de la partida
+            if (juego.PartidaTerminada && !finMostrado)
             {
-                resultadoGuardado = true;
-                GuardarResultado();
+                finMostrado = true;
                 using (FormFinal pantallaFinal = new FormFinal(juego))
                     pantallaFinal.ShowDialog(this);
 
                 Close();
+                return;
             }
+
+            // 5. Color inicial / desafío de +4, si me toca decidir a mí
+            ProgramarPendientes();
         }
-        private void CambioDeTurno()
+
+        // Dibuja y reinicia lo que depende del turno (antes: CambioDeTurno)
+        private void AplicarEstado()
         {
-        }
-
-        // ---------- Eventos ----------
-        private void ClickCarta(Carta carta)
-        {
-            if (juego.RondaTerminada) return;
-
-            int indice = IndiceDe(juego.JugadorActual);
-
-            string colorElegido = null;
-            if (carta.EsComodin())
-                colorElegido = ElegirColor("Elige un color");
-
-            bool unoDicho = decirUno;
-            if (Intentar(() => juego.JugarCarta(carta, colorElegido, unoDicho)))
+            if (estado.IndiceActual != turnoAnterior)
             {
-                Registrar(indice, "jugar", carta.Texto(), colorElegido);
-                if (unoDicho)
-                    Registrar(indice, "uno");
+                turnoAnterior = estado.IndiceActual;
                 decirUno = false;
             }
+            Actualizar();
+        }
 
+        // Foto del juego para una computadora: solo ve las manos de "visibles"
+        // (al terminar la ronda se enseñan todas para ver los puntos)
+        private EstadoRed ConstruirEstado(List<int> visibles)
+        {
+            bool verTodo = juego.RondaTerminada;
+            EstadoRed e = new EstadoRed();
+            e.Tuyos = new List<int>(visibles);
+
+            for (int i = 0; i < juego.Jugadores.Count; i++)
+            {
+                JugadorUno j = juego.Jugadores[i];
+                JugadorRed jr = new JugadorRed();
+                jr.Nombre = j.Nombre;
+                jr.Puntos = j.Puntos;
+                jr.NumCartas = j.Mano.Count;
+                if (verTodo || visibles.Contains(i))
+                {
+                    jr.Mano = new List<CartaRed>();
+                    foreach (Carta c in j.Mano)
+                        jr.Mano.Add(CartaRed.De(c, juego.PuedeJugar(c)));
+                }
+                e.Jugadores.Add(jr);
+            }
+
+            e.IndiceActual = IndiceDe(juego.JugadorActual);
+            e.CartaSuperior = CartaRed.De(juego.CartaSuperior, false);
+            e.ColorActivo = juego.ColorActivo;
+            e.Direccion = juego.Direccion;
+            e.NumeroRonda = juego.NumeroRonda;
+            e.RondaTerminada = juego.RondaTerminada;
+            e.PartidaTerminada = juego.PartidaTerminada;
+            e.GanadorPartida = juego.GanadorPartida == null ? null : juego.GanadorPartida.Nombre;
+            e.EsperandoDesafioMas4 = juego.EsperandoDesafioMas4;
+            e.FaltaUnoPendiente = juego.FaltaUnoPendiente;
+            return e;
+        }
+
+        private void EnviarEstadoAlCliente()
+        {
+            EstadoRed e = ConstruirEstado(indicesRemotos);
+            e.Error = errorCliente;
+            errorCliente = null;
+            conexion.Enviar("Estado", e);
+        }
+
+        private bool EsMio(int indiceJugador)
+        {
+            return misIndices.Contains(indiceJugador);
+        }
+
+        // ---------- Acciones del motor (Local y Host) ----------
+        // Las ejecuta quien tiene el Juego: un clic propio o un mensaje del cliente.
+        // Ya no guardan el log: RegistradorLog lo hace solo al recibir los eventos de Juego.
+        private void EjecutarJugar(int posicionMano, string colorElegido, bool unoDicho)
+        {
+            List<Carta> mano = juego.JugadorActual.Mano;
+            if (posicionMano < 0 || posicionMano >= mano.Count)
+            {
+                mensajeError = "Esa carta no existe.";
+                return;
+            }
+
+            Carta carta = mano[posicionMano];
+            Intentar(() => juego.JugarCarta(carta, colorElegido, unoDicho));
+        }
+
+        private void EjecutarRobar()
+        {
+            Intentar(() => { juego.RobarCarta(); });
+        }
+
+        private void EjecutarPasar()
+        {
+            Intentar(() => juego.PasarTrasRobar());
+        }
+
+        private void EjecutarFaltaUno()
+        {
+            Intentar(() => juego.SenalarFaltaUno());
+        }
+
+        private void EjecutarColorInicial(string color)
+        {
+            Intentar(() => juego.ElegirColorInicial(color));
+        }
+
+        private void EjecutarMas4(bool desafiar)
+        {
+            Intentar(() => juego.ResolverMas4(desafiar));
+        }
+
+        // ---------- Eventos (clics) ----------
+        // Local/Host: ejecutan en el motor. Cliente: mandan la petición al anfitrión.
+        private void ClickCarta(int posicionMano)
+        {
+            if (estado == null || estado.RondaTerminada) return;
+            if (!EsMio(estado.IndiceActual)) { AvisarNoEsTurno(); return; }
+
+            JugadorRed yo = estado.Jugadores[estado.IndiceActual];
+            if (yo.Mano == null || posicionMano >= yo.Mano.Count) return;
+
+            string colorElegido = null;
+            if (yo.Mano[posicionMano].ACarta().EsComodin())
+                colorElegido = ElegirColor("Elige un color");
+
+            bool unoDicho = decirUno;   // se apaga solo al cambiar el turno (AplicarEstado)
+
+            if (modo == Modo.Cliente)
+            {
+                EnviarAccion("Jugar", posicionMano, colorElegido, unoDicho, false);
+                return;
+            }
+
+            EjecutarJugar(posicionMano, colorElegido, unoDicho);
             DespuesDeAccion();
         }
 
         private void ClickUno(object sender, EventArgs e)
         {
+            if (estado == null) return;
             decirUno = !decirUno;   // se presiona antes de jugar la penúltima carta
             Actualizar();
         }
 
         private void ClickMazo(object sender, EventArgs e)
         {
-            if (juego.RondaTerminada) return;
+            if (estado == null || estado.RondaTerminada) return;
+            if (!EsMio(estado.IndiceActual)) { AvisarNoEsTurno(); return; }
 
-            int indice = IndiceDe(juego.JugadorActual);
-            Carta robada = null;
-            if (Intentar(() => { robada = juego.RobarCarta(); }))
-                Registrar(indice, "robar", robada != null ? robada.Texto() : null);
+            if (modo == Modo.Cliente)
+            {
+                EnviarAccion("Robar", 0, null, false, false);
+                return;
+            }
 
+            EjecutarRobar();
             DespuesDeAccion();
         }
 
         private void ClickPasar(object sender, EventArgs e)
         {
-            if (juego.RondaTerminada) return;
+            if (estado == null || estado.RondaTerminada) return;
+            if (!EsMio(estado.IndiceActual)) { AvisarNoEsTurno(); return; }
 
-            int indice = IndiceDe(juego.JugadorActual);
-            if (Intentar(() => juego.PasarTrasRobar()))
-                Registrar(indice, "pasar");
+            if (modo == Modo.Cliente)
+            {
+                EnviarAccion("Pasar", 0, null, false, false);
+                return;
+            }
 
+            EjecutarPasar();
             DespuesDeAccion();
         }
 
         private void ClickFaltaUno(object sender, EventArgs e)
         {
-            int indice = IndiceDe(juego.JugadorActual);
-            if (Intentar(() => juego.SenalarFaltaUno()))
-                Registrar(indice, "falta_uno");
+            if (estado == null) return;
 
+            if (modo == Modo.Cliente)
+            {
+                EnviarAccion("FaltaUno", 0, null, false, false);
+                return;
+            }
+
+            EjecutarFaltaUno();
             DespuesDeAccion();
         }
 
         private void ClickSiguienteRonda(object sender, EventArgs e)
         {
+            if (modo == Modo.Cliente) return;   // solo el anfitrión (o el modo Local) la inicia
+
             Intentar(() => juego.IniciarRonda());
-            jugadorAnterior = null;
+            decirUno = false;
+            turnoAnterior = -1;
             DespuesDeAccion();
         }
 
-        // ---------- Base de datos (log) ----------
-        private void Registrar(int indiceJugador, string tipo, string carta = null, string color = null)
+        private void AvisarNoEsTurno()
         {
-            if (idPartida < 0 || indiceJugador < 0) return;
+            mensajeError = "No es tu turno.";
+            Actualizar();
+        }
 
+        // ---------- Decisiones pendientes: color inicial y desafío de +4 ----------
+        // Las toma quien controla al jugador en turno (en el anfitrión, el cliente o Local).
+        private void ProgramarPendientes()
+        {
+            if (IsHandleCreated && !cerrando)
+                BeginInvoke((Action)ResolverPendientes);
+        }
+
+        private void ResolverPendientes()
+        {
+            if (resolviendo || cerrando || IsDisposed || estado == null) return;
+            if (estado.RondaTerminada || estado.PartidaTerminada) return;
+            if (!EsMio(estado.IndiceActual)) return;
+
+            resolviendo = true;
             try
             {
-                bd.RegistrarMovimiento(idPartida, idsJugadores[indiceJugador], tipo, carta, color);
+                string nombre = estado.Jugadores[estado.IndiceActual].Nombre;
+
+                if (estado.ColorActivo == null)
+                {
+                    string color = ElegirColor(nombre + ", elige el color inicial");
+                    if (modo == Modo.Cliente)
+                        EnviarAccion("ColorInicial", 0, color, false, false);
+                    else
+                    {
+                        EjecutarColorInicial(color);
+                        DespuesDeAccion();
+                    }
+                }
+                else if (estado.EsperandoDesafioMas4)
+                {
+                    DialogResult respuesta = MessageBox.Show(
+                        nombre + ": se jugó un +4. ¿Quieres desafiarlo?",
+                        "Desafío de +4", MessageBoxButtons.YesNo);
+                    bool desafiar = (respuesta == DialogResult.Yes);
+                    if (modo == Modo.Cliente)
+                        EnviarAccion("Mas4", 0, null, false, desafiar);
+                    else
+                    {
+                        EjecutarMas4(desafiar);
+                        DespuesDeAccion();
+                    }
+                }
             }
-            catch (Exception ex)
+            finally
             {
-                AvisarErrorBD(ex);
+                resolviendo = false;
             }
         }
 
-        private void GuardarResultado()
+        // ---------- Red ----------
+        // Suscribirse primero y llamar a Iniciar() después, para no perder mensajes
+        private void ConectarRed()
         {
-            if (idPartida < 0) return;
+            conexion.MensajeRecibido += AlRecibirMensaje;
+            conexion.Desconectado += AlDesconectar;
+            conexion.Iniciar();
+        }
 
-            Dictionary<int, int> cartasRestantes = new Dictionary<int, int>();
-            for (int i = 0; i < juego.Jugadores.Count; i++)
-                cartasRestantes[idsJugadores[i]] = juego.Jugadores[i].Mano.Count;
+        private void EnviarAccion(string tipo, int posicion, string color, bool uno, bool desafiar)
+        {
+            AccionRed a = new AccionRed();
+            a.Indice = posicion;
+            a.Color = color;
+            a.DecirUno = uno;
+            a.Desafiar = desafiar;
+            conexion.Enviar(tipo, a);
+        }
 
-            int idGanador = idsJugadores[IndiceDe(juego.GanadorPartida)];
+        // Llega en el hilo de la interfaz (Conexion.Iniciar se llamó desde aquí)
+        private void AlRecibirMensaje(Mensaje m)
+        {
+            if (cerrando) return;
 
-            try
+            if (modo == Modo.Cliente)
+                RecibirComoCliente(m);
+            else if (modo == Modo.Host)
+                RecibirComoHost(m);
+        }
+
+        private void RecibirComoCliente(Mensaje m)
+        {
+            if (m.Tipo != "Estado") return;
+
+            estado = m.Obtener<EstadoRed>();
+            misIndices = estado.Tuyos;
+            if (!string.IsNullOrEmpty(estado.Error))
+                mensajeError = estado.Error;
+
+            AplicarEstado();
+
+            if (estado.PartidaTerminada && !finMostrado)
             {
-                bd.RegistrarResultado(idPartida, idGanador, cartasRestantes);
+                finMostrado = true;
+                MostrarFinCliente();
+                return;
             }
-            catch (Exception ex)
+            ProgramarPendientes();
+        }
+
+        private void MostrarFinCliente()
+        {
+            List<JugadorRed> orden = new List<JugadorRed>(estado.Jugadores);
+            orden.Sort((a, b) => b.Puntos.CompareTo(a.Puntos));
+
+            string texto = "¡" + estado.GanadorPartida + " ganó la partida!\n\n";
+            foreach (JugadorRed j in orden)
+                texto += j.Nombre + ": " + j.Puntos + " pts\n";
+
+            MessageBox.Show(this, texto, "Fin de la partida");
+            Close();
+        }
+
+        // El anfitrión valida y ejecuta lo que pide el cliente; el motor decide si es legal
+        private void RecibirComoHost(Mensaje m)
+        {
+            AccionRed a = m.Datos == null ? new AccionRed() : m.Obtener<AccionRed>();
+            mensajeError = null;
+            errorCliente = null;
+
+            bool exigeTurno = m.Tipo == "Jugar" || m.Tipo == "Robar" || m.Tipo == "Pasar"
+                           || m.Tipo == "ColorInicial" || m.Tipo == "Mas4";
+
+            if (exigeTurno && !indicesRemotos.Contains(IndiceDe(juego.JugadorActual)))
             {
-                AvisarErrorBD(ex);
+                errorCliente = "No es tu turno.";
             }
+            else
+            {
+                switch (m.Tipo)
+                {
+                    case "Jugar": EjecutarJugar(a.Indice, a.Color, a.DecirUno); break;
+                    case "Robar": EjecutarRobar(); break;
+                    case "Pasar": EjecutarPasar(); break;
+                    case "FaltaUno": EjecutarFaltaUno(); break;
+                    case "ColorInicial": EjecutarColorInicial(a.Color); break;
+                    case "Mas4": EjecutarMas4(a.Desafiar); break;
+                    default: return;
+                }
+            }
+
+            // Si el motor rechazó la jugada, el aviso es para el cliente, no para mí
+            if (mensajeError != null)
+            {
+                errorCliente = mensajeError;
+                mensajeError = null;
+            }
+
+            DespuesDeAccion();
+        }
+
+        private void AlDesconectar()
+        {
+            if (cerrando) return;
+            if (estado != null && estado.PartidaTerminada) return;
+
+            cerrando = true;
+            MessageBox.Show(this, "Se perdió la conexión con la otra computadora.", "Conexión");
+            Close();
+        }
+
+        // ---------- Base de datos (log) ----------
+        // El guardado lo hace RegistradorLog. Aquí solo se avisa si algo falló.
+        private void RevisarLog()
+        {
+            if (registrador != null && !avisoBD && registrador.UltimoError != null)
+                AvisarErrorBD(registrador.UltimoError);
         }
 
         // El aviso sale solo una vez para no llenar la pantalla de mensajes
-        private void AvisarErrorBD(Exception ex)
+        private void AvisarErrorBD(string detalle)
         {
             if (avisoBD) return;
             avisoBD = true;
-            MessageBox.Show("No se pudo guardar en la base de datos. Revisa que la API esté encendida.\n\n" + ex.Message,
+            MessageBox.Show("No se pudo guardar en la base de datos. Revisa que la API esté encendida.\n\n" + detalle,
                             "Base de datos");
         }
 
@@ -880,7 +1220,7 @@ namespace uno
                 boton.FlatStyle = FlatStyle.Flat;
                 boton.FlatAppearance.BorderSize = 0;
                 boton.BackColor = ColorDibujo(colorBoton);
-                boton.ForeColor = COLOR_TEXTO_BOTON;         
+                boton.ForeColor = COLOR_TEXTO_BOTON;
                 boton.UseCompatibleTextRendering = true;
                 boton.Font = FuenteTitulo(10);
                 boton.Click += (s, e) =>
@@ -903,73 +1243,6 @@ namespace uno
             if (color == "Azul") return Tema.Azul;
             if (color == "Amarillo") return Tema.Amarillo;
             return Color.FromArgb(70, 60, 90);
-        }
-
-        private Image ObtenerImagen(Carta carta)
-        {
-            return Cargar(carta.NombreImagen(), carta.Texto(), ColorDibujo(carta.Color));
-        }
-
-        private Image ObtenerReverso()
-        {
-            return Cargar("reverso.png", "UNO", Color.FromArgb(70, 60, 90));
-        }
-
-        private Image Cargar(string nombreArchivo, string textoProvisional, Color fondo)
-        {
-            if (imagenes.ContainsKey(nombreArchivo))
-                return imagenes[nombreArchivo];
-
-            Image imagen;
-            string ruta = RutaImagen(nombreArchivo);
-
-            if (ruta != null)
-                imagen = Image.FromFile(ruta);
-            else
-                imagen = CrearProvisional(textoProvisional, fondo);
-
-            imagenes[nombreArchivo] = imagen;
-            return imagen;
-        }
-
-        private string RutaImagen(string nombreArchivo)
-        {
-            string ruta = Path.Combine(Application.StartupPath, CARPETA_IMAGENES, nombreArchivo);
-            if (File.Exists(ruta))
-                return ruta;
-
-            string alterno = nombreArchivo.Replace("rosa_", "rojo_").Replace("morado_", "verde_");
-            ruta = Path.Combine(Application.StartupPath, CARPETA_IMAGENES, alterno);
-            if (File.Exists(ruta))
-                return ruta;
-
-            return null;
-        }
-
-        private Image CrearProvisional(string texto, Color fondo)
-        {
-            Bitmap imagen = new Bitmap(ANCHO, ALTO);
-
-            using (Graphics g = Graphics.FromImage(imagen))
-            {
-                g.SmoothingMode = SmoothingMode.AntiAlias;
-                g.TextRenderingHint = TextRenderingHint.AntiAlias;
-                g.Clear(Color.White);
-
-                using (SolidBrush brocha = new SolidBrush(fondo))
-                    g.FillRectangle(brocha, 5, 5, ANCHO - 10, ALTO - 10);
-
-                using (Font fuente = Fuente(13))
-                {
-                    StringFormat formato = new StringFormat();
-                    formato.Alignment = StringAlignment.Center;
-                    formato.LineAlignment = StringAlignment.Center;
-                    Brush brochaTexto = (fondo.GetBrightness() < 0.4f) ? Brushes.White : new SolidBrush(Tema.Texto);
-                    g.DrawString(texto, fuente, brochaTexto, new RectangleF(0, 0, ANCHO, ALTO), formato);
-                }
-            }
-
-            return imagen;
         }
     }
 }
