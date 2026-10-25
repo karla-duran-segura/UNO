@@ -101,6 +101,7 @@
     <Compile Include="BotonPastel.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="EstadoRed.cs" />
     <Compile Include="FormFinal.cs">
       <SubType>Form</SubType>
     </Compile>
