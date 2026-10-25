@@ -74,6 +74,10 @@ class FinPartida(BaseModel):
     cartas: List[CartasJugador] = []
 
 
+class NuevoJugador(BaseModel):
+    nombre: str
+
+
 # Rutas para CONSULTAR (GET)
 @app.get("/")
 def inicio():
@@ -125,6 +129,23 @@ def obtener_movimientos(id_partida: int):
 
 
 # Rutas para GUARDAR (POST / PUT)
+@app.post("/jugadores")
+def crear_jugador(datos: NuevoJugador):
+    nombre = datos.nombre.strip()
+    if len(nombre) == 0:
+        raise HTTPException(status_code=400, detail="El nombre no puede estar vacío")
+    if len(nombre) > 50:
+        raise HTTPException(status_code=400, detail="El nombre admite máximo 50 caracteres")
+
+    try:
+        id_jugador = ejecutar("INSERT INTO Jugadores (nombre) VALUES (%s)", (nombre,))
+    except pymysql.err.IntegrityError:
+        # la columna nombre es UNIQUE: ese nombre ya está registrado
+        raise HTTPException(status_code=409, detail="Ya existe un jugador con ese nombre")
+
+    return {"id": id_jugador, "nombre": nombre}
+
+
 @app.post("/partidas")
 def crear_partida(datos: NuevaPartida):
     if len(datos.jugadores) < 2:
