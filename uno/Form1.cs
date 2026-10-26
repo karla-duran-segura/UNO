@@ -13,12 +13,17 @@ namespace uno
 
         private readonly BaseDatos baseDatos = new BaseDatos();
         private readonly List<TarjetaJugador> tarjetas = new List<TarjetaJugador>();
-        private readonly List<TarjetaJugador> elegidas = new List<TarjetaJugador>();  
+        private readonly List<TarjetaJugador> elegidas = new List<TarjetaJugador>();
 
         // Aviso de error de conexión 
         private Label lblErrorTitulo;
         private Label lblErrorDetalle;
         private BotonPastel btnReintentar;
+
+        // Botones creados por código (esquina superior derecha): registrar jugador y partida en red
+        private BotonPastel btnRegistrar;
+        private BotonPastel btnCrearRed;
+        private BotonPastel btnUnirse;
 
         public FormInicio()
         {
@@ -31,6 +36,7 @@ namespace uno
 
         private void FormInicio_Load(object sender, EventArgs e)
         {
+            CrearBotonesExtra();
             CargarJugadores();
         }
 
@@ -73,6 +79,97 @@ namespace uno
         private void btnSalir_Click(object sender, EventArgs e)
         {
             Close();
+        }
+
+        // ---------- Registrar jugador y partida en red ----------
+        // Los botones se crean por código en la esquina superior derecha.
+        // Si se encima con algo, ajusta "margen" o "Location" en CrearBotonEsquina.
+        private void CrearBotonesExtra()
+        {
+            if (btnRegistrar != null) return;
+
+            btnRegistrar = CrearBotonEsquina("+ Registrar jugador", 0);
+            btnRegistrar.Click += btnRegistrar_Click;
+
+            btnCrearRed = CrearBotonEsquina("Crear partida en red", 1);
+            btnCrearRed.Click += btnCrearRed_Click;
+            btnCrearRed.Enabled = elegidas.Count == Requeridos;
+
+            btnUnirse = CrearBotonEsquina("Unirme a una partida", 2);
+            btnUnirse.Click += btnUnirse_Click;
+        }
+
+        private BotonPastel CrearBotonEsquina(string texto, int fila)
+        {
+            const int ancho = 210;
+            const int alto = 36;
+            const int margen = 20;
+            const int separacion = 8;
+
+            BotonPastel boton = new BotonPastel
+            {
+                Text = texto,
+                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Regular, GraphicsUnit.Point),
+                Size = new Size(ancho, alto),
+                Location = new Point(ClientSize.Width - ancho - margen, margen + fila * (alto + separacion)),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                TabIndex = 30 + fila
+            };
+            Controls.Add(boton);
+            boton.BringToFront();
+            return boton;
+        }
+
+        private void btnRegistrar_Click(object sender, EventArgs e)
+        {
+            using (FormRegistro registro = new FormRegistro(baseDatos))
+            {
+                registro.ShowDialog(this);
+                if (registro.SeRegistroAlguno)
+                    RecargarConservandoSeleccion();
+            }
+        }
+
+        // Recarga la lista (para que aparezcan los jugadores nuevos) sin perder a los ya elegidos
+        private void RecargarConservandoSeleccion()
+        {
+            List<int> ids = elegidas.Select(t => t.Jugador.id).ToList();
+            CargarJugadores();
+            foreach (int id in ids)
+            {
+                TarjetaJugador tarjeta = tarjetas.FirstOrDefault(t => t.Jugador.id == id);
+                if (tarjeta != null) elegidas.Add(tarjeta);
+            }
+            ActualizarSeleccion();
+        }
+
+        // Anfitrión: usa los 4 jugadores elegidos, igual que ComenzarPartida
+        private void btnCrearRed_Click(object sender, EventArgs e)
+        {
+            if (elegidas.Count != Requeridos) return;
+
+            List<JugadorBD> jugadores = new List<JugadorBD>();
+            for (int i = 0; i < elegidas.Count; i++)
+                jugadores.Add(elegidas[i].Jugador);
+
+            using (FormRed red = new FormRed(jugadores))
+            {
+                Hide();
+                red.ShowDialog();
+            }
+            Show();
+            CargarJugadores();   // como al terminar una partida local: recarga ganadas/perdidas
+        }
+
+        // Cliente: no necesita elegir jugadores ni tener la API encendida
+        private void btnUnirse_Click(object sender, EventArgs e)
+        {
+            using (FormRed red = new FormRed())
+            {
+                Hide();
+                red.ShowDialog();
+            }
+            Show();
         }
 
         private void btnComenzar_Click(object sender, EventArgs e)
@@ -290,9 +387,9 @@ namespace uno
             var tarjeta = (TarjetaJugador)sender;
 
             if (elegidas.Contains(tarjeta))
-                elegidas.Remove(tarjeta);              
+                elegidas.Remove(tarjeta);
             else if (elegidas.Count < Requeridos)
-                elegidas.Add(tarjeta);                 
+                elegidas.Add(tarjeta);
 
             ActualizarSeleccion();
         }
@@ -303,11 +400,12 @@ namespace uno
 
             foreach (var t in tarjetas)
             {
-                t.Turno = elegidas.IndexOf(t) + 1;     
+                t.Turno = elegidas.IndexOf(t) + 1;
                 t.Enabled = !completo || t.Elegida;    // con 4 elegidos, las demás se bloquean
             }
 
             btnComenzar.Enabled = completo;
+            if (btnCrearRed != null) btnCrearRed.Enabled = completo;
 
             if (completo)
             {
