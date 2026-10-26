@@ -102,8 +102,11 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="EstadoRed.cs" />
+    <Compile Include="FormRed.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="FormRegistro.cs">
-     <SubType>Form</SubType>
+      <SubType>Form</SubType>
     </Compile>
     <Compile Include="FormFinal.cs">
       <SubType>Form</SubType>
