@@ -86,8 +86,11 @@ using System.Windows.Forms;
   MODO RED (cliente-servidor)
   - Hay tres modos (enum Modo):
       Local   -> una sola computadora, como antes (yo controlo los 4 jugadores).
-      Host    -> ESTA computadora tiene el Juego, la BD y las reglas. Controla los
-                 jugadores 0 y 2; el cliente controla el 1 y el 3.
+      Host    -> ESTA computadora tiene el Juego, la BD y las reglas. Tiene una
+                 Conexion por cada cliente (1 a 3). Los asientos se reparten por
+                 turno: el asiento i es de la computadora (i % computadoras), y la
+                 0 es el anfitrión. Con 2 computadoras: yo 0 y 2, el cliente 1 y 3.
+                 Con 4: un jugador por computadora.
       Cliente -> NO tiene Juego ni BD. Recibe un EstadoRed (JSON) tras cada acción,
                  lo dibuja y manda sus clics al anfitrión ("Jugar", "Robar"...).
   - Todo se dibuja desde "estado" (un EstadoRed), sea Local, Host o Cliente.
@@ -142,15 +145,18 @@ namespace uno
         private enum Modo { Local, Host, Cliente }
 
         private Modo modo = Modo.Local;
-        private Conexion conexion;                           // solo Host y Cliente
+        private Conexion conexion;                           // solo Cliente: su conexión con el anfitrión
+        private List<Conexion> conexiones = new List<Conexion>();   // solo Host: una por cliente
+        private List<List<int>> asientosDe = new List<List<int>>(); // solo Host: asientosDe[i] = jugadores de la conexión i
         private Juego juego;                                 // solo Local y Host (quien tiene las reglas)
         private BaseDatos bd;                                // solo Local y Host (el cliente no toca la BD)
         private EstadoRed estado;                            // foto de la partida: de aquí se dibuja todo
         private List<int> misIndices = new List<int>();      // jugadores que controla ESTA computadora
-        private List<int> indicesRemotos = new List<int>();  // jugadores que controla el cliente (solo Host)
+
         private int perspectiva = 0;                         // jugador que se dibuja abajo
         private int turnoAnterior = -1;
-        private string errorCliente = null;                  // jugada rechazada del cliente; se le avisa en su siguiente Estado
+        private string errorCliente = null;                 // jugada rechazada de un cliente; solo ese cliente la recibe
+        private int conexionConError = -1;                   // qué conexión recibe errorCliente
         private bool cerrando = false;
         private bool resolviendo = false;
         private RegistradorLog registrador;                  // solo Local y Host: guarda el log en la BD
@@ -184,12 +190,12 @@ namespace uno
             IniciarPartida(jugadores);
         }
 
-        // Anfitrión: ya hay un cliente conectado
-        public FormJuego(List<JugadorBD> jugadores, Conexion conexion)
+        // Anfitrión: ya están conectados todos los clientes (1 a 3), en orden de llegada
+        public FormJuego(List<JugadorBD> jugadores, List<Conexion> conexiones)
         {
             Inicializar();
             modo = Modo.Host;
-            this.conexion = conexion;
+            this.conexiones = conexiones;
             Text = "UNO - Partida (anfitrión)";
             IniciarPartida(jugadores);
         }
@@ -201,8 +207,8 @@ namespace uno
             modo = Modo.Cliente;
             this.conexion = conexion;
             Text = "UNO - Partida (cliente)";
-            lblMensaje.Text = "Conectado. Esperando los datos de la partida...";
-            ConectarRed();
+            lblMensaje.Text = "Conectado. Esperando a que empiece la partida...";
+            ConectarRedCliente();
         }
 
         private void Inicializar()
@@ -225,6 +231,8 @@ namespace uno
             {
                 cerrando = true;
                 if (conexion != null) conexion.Cerrar();
+                foreach (Conexion c in conexiones)
+                    c.Cerrar();
             };
         }
 
@@ -334,6 +342,9 @@ namespace uno
         //Inicio de la partida (Local y Host: quien tiene el Juego)
         private void IniciarPartida(List<JugadorBD> jugadores)
         {
+            if (modo == Modo.Host && (conexiones.Count < 1 || conexiones.Count >= jugadores.Count))
+                throw new ArgumentException("Se necesita al menos 1 cliente y menos clientes que jugadores.");
+
             List<string> nombres = new List<string>();
             for (int i = 0; i < jugadores.Count; i++)
             {
@@ -351,17 +362,25 @@ namespace uno
             if (!registrador.Iniciar())
                 AvisarErrorBD(registrador.UltimoError);
 
-            // Reparto de asientos: en red, el anfitrión toma 0 y 2; el cliente 1 y 3
+            // Reparto de asientos entre las computadoras: el asiento i es de la computadora
+            // (i % total). La 0 es el anfitrión; la 1, el primer cliente que se conectó, etc.
+            //   2 computadoras: yo 0 y 2; el cliente 1 y 3
+            //   4 computadoras: yo 0; un jugador por cada cliente
+            int equipos = conexiones.Count + 1;
+            for (int c = 0; c < conexiones.Count; c++)
+                asientosDe.Add(new List<int>());
+
             for (int i = 0; i < juego.Jugadores.Count; i++)
             {
-                if (modo == Modo.Host && i % 2 == 1)
-                    indicesRemotos.Add(i);
-                else
+                int equipo = (modo == Modo.Host) ? i % equipos : 0;
+                if (equipo == 0)
                     misIndices.Add(i);
+                else
+                    asientosDe[equipo - 1].Add(i);
             }
 
             if (modo == Modo.Host)
-                ConectarRed();
+                ConectarRedHost();
 
             DespuesDeAccion();
         }
@@ -777,7 +796,7 @@ namespace uno
 
             // 2. El anfitrión le manda su foto al cliente
             if (modo == Modo.Host)
-                EnviarEstadoAlCliente();
+                EnviarEstadosAClientes();
 
             // 3. ¿Falló el log? (aviso una sola vez)
             RevisarLog();
@@ -845,12 +864,18 @@ namespace uno
             return e;
         }
 
-        private void EnviarEstadoAlCliente()
+        // Cada cliente recibe SU foto: solo ve las manos de sus propios asientos.
+        // Si la jugada de un cliente fue rechazada, el error es solo para él.
+        private void EnviarEstadosAClientes()
         {
-            EstadoRed e = ConstruirEstado(indicesRemotos);
-            e.Error = errorCliente;
+            for (int c = 0; c < conexiones.Count; c++)
+            {
+                EstadoRed e = ConstruirEstado(asientosDe[c]);
+                e.Error = (c == conexionConError) ? errorCliente : null;
+                conexiones[c].Enviar("Estado", e);
+            }
             errorCliente = null;
-            conexion.Enviar("Estado", e);
+            conexionConError = -1;
         }
 
         private bool EsMio(int indiceJugador)
@@ -1044,12 +1069,27 @@ namespace uno
         }
 
         // ---------- Red ----------
-        // Suscribirse primero y llamar a Iniciar() después, para no perder mensajes
-        private void ConectarRed()
+        // Se suscribe primero y se llama a Iniciar() después, para no perder mensajes
+        private void ConectarRedCliente()
         {
-            conexion.MensajeRecibido += AlRecibirMensaje;
+            conexion.MensajeRecibido += AlRecibirMensajeCliente;
             conexion.Desconectado += AlDesconectar;
             conexion.Iniciar();
+        }
+
+        // Una suscripción por conexión, para saber de qué cliente llega cada mensaje
+        private void ConectarRedHost()
+        {
+            for (int i = 0; i < conexiones.Count; i++)
+            {
+                int c = i;   // copia para el lambda
+                conexiones[c].MensajeRecibido += m =>
+                {
+                    if (!cerrando) RecibirComoHost(m, c);
+                };
+                conexiones[c].Desconectado += AlDesconectar;
+                conexiones[c].Iniciar();
+            }
         }
 
         private void EnviarAccion(string tipo, int posicion, string color, bool uno, bool desafiar)
@@ -1063,14 +1103,10 @@ namespace uno
         }
 
         // Llega en el hilo de la interfaz (Conexion.Iniciar se llamó desde aquí)
-        private void AlRecibirMensaje(Mensaje m)
+        private void AlRecibirMensajeCliente(Mensaje m)
         {
             if (cerrando) return;
-
-            if (modo == Modo.Cliente)
-                RecibirComoCliente(m);
-            else if (modo == Modo.Host)
-                RecibirComoHost(m);
+            RecibirComoCliente(m);
         }
 
         private void RecibirComoCliente(Mensaje m)
@@ -1106,17 +1142,19 @@ namespace uno
             Close();
         }
 
-        // El anfitrión valida y ejecuta lo que pide el cliente; el motor decide si es legal
-        private void RecibirComoHost(Mensaje m)
+        // El anfitrión valida y ejecuta lo que pide el cliente c; el motor decide si es legal
+        private void RecibirComoHost(Mensaje m, int c)
         {
             AccionRed a = m.Datos == null ? new AccionRed() : m.Obtener<AccionRed>();
             mensajeError = null;
             errorCliente = null;
+            conexionConError = -1;
 
             bool exigeTurno = m.Tipo == "Jugar" || m.Tipo == "Robar" || m.Tipo == "Pasar"
                            || m.Tipo == "ColorInicial" || m.Tipo == "Mas4";
 
-            if (exigeTurno && !indicesRemotos.Contains(IndiceDe(juego.JugadorActual)))
+            // Solo puede actuar la conexión que controla al jugador en turno
+            if (exigeTurno && !asientosDe[c].Contains(IndiceDe(juego.JugadorActual)))
             {
                 errorCliente = "No es tu turno.";
             }
@@ -1134,12 +1172,14 @@ namespace uno
                 }
             }
 
-            // Si el motor rechazó la jugada, el aviso es para el cliente, no para mí
+            // Si el motor rechazó la jugada, el aviso es para ese cliente, no para mí
             if (mensajeError != null)
             {
                 errorCliente = mensajeError;
                 mensajeError = null;
             }
+            if (errorCliente != null)
+                conexionConError = c;
 
             DespuesDeAccion();
         }
