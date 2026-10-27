@@ -81,41 +81,51 @@ namespace uno
             Close();
         }
 
-        // ---------- Registrar jugador y partida en red ----------
-        // Los botones se crean por código en la esquina superior derecha.
-        // Si se encima con algo, ajusta "margen" o "Location" en CrearBotonEsquina.
+        // ---------- Acciones adicionales: dos columnas, sin superposiciones ----------
         private void CrearBotonesExtra()
         {
             if (btnRegistrar != null) return;
 
-            btnRegistrar = CrearBotonEsquina("+ Registrar jugador", 0);
+            // Reservamos espacio real para los botones, en vez de ponerlos
+            // sobre el panel de jugadores.
+            ClientSize = new Size(1100, 760);
+            panelJugadores.SetBounds(540, 20, 520, 710);
+
+            // Acciones generales en la columna izquierda.
+            btnRegistrar = CrearBotonAccion("+ Registrar jugador",
+                new Rectangle(64, 620, 210, 42), this, 30);
             btnRegistrar.Click += btnRegistrar_Click;
 
-            btnCrearRed = CrearBotonEsquina("Crear partida en red", 1);
+            btnUnirse = CrearBotonAccion("Unirme a una partida",
+                new Rectangle(290, 620, 230, 42), this, 31);
+            btnUnirse.Click += btnUnirse_Click;
+
+            // La acción de anfitrión pertenece al panel de selección.
+            btnCrearRed = CrearBotonAccion("Crear partida en red",
+                new Rectangle(44, 610, 432, 46), panelJugadores, 32);
             btnCrearRed.Click += btnCrearRed_Click;
             btnCrearRed.Enabled = elegidas.Count == Requeridos;
 
-            btnUnirse = CrearBotonEsquina("Unirme a una partida", 2);
-            btnUnirse.Click += btnUnirse_Click;
+            // Salir tiene su propia fila.
+            btnSalir.Location = new Point(64, 690);
         }
 
-        private BotonPastel CrearBotonEsquina(string texto, int fila)
+        private BotonPastel CrearBotonAccion(
+            string texto, Rectangle posicion, Control contenedor, int tabIndex)
         {
-            const int ancho = 210;
-            const int alto = 36;
-            const int margen = 20;
-            const int separacion = 8;
-
             BotonPastel boton = new BotonPastel
             {
                 Text = texto,
-                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Regular, GraphicsUnit.Point),
-                Size = new Size(ancho, alto),
-                Location = new Point(ClientSize.Width - ancho - margen, margen + fila * (alto + separacion)),
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                TabIndex = 30 + fila
+                Font = new Font("Segoe UI Semibold", 10F,
+                    FontStyle.Regular, GraphicsUnit.Point),
+                Location = posicion.Location,
+                Size = posicion.Size,
+                TabIndex = tabIndex,
+                Cursor = Cursors.Hand,
+                BackColor = Color.Transparent
             };
-            Controls.Add(boton);
+
+            contenedor.Controls.Add(boton);
             boton.BringToFront();
             return boton;
         }
