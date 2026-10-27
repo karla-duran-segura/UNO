@@ -101,8 +101,8 @@ using System.Windows.Forms;
     controla al jugador que debe decidir: ResolverPendientes().
   - Solo el anfitrión valida jugadas y guarda el log en la BD.
   - Conexion.cs manda/recibe; EstadoRed.cs define los datos; FormRed.cs conecta.
-
- */
+*/
+ 
 
 namespace uno
 {
