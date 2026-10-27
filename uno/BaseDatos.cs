@@ -35,7 +35,7 @@ namespace uno
     {
         // IP de la computadora que corre la API (el server) y el puerto de la API.
         // Si cambia la IP del server, solo hay que editar esta línea.
-        private const string UrlBase = "http://192.168.1.50:8000";
+        private const string UrlBase = "http://10.103.151.129:8000";
 
         private static readonly HttpClient http = new HttpClient
         {
