@@ -61,16 +61,18 @@ namespace uno
         public string GanadorPartida { get; set; }
         public bool EsperandoDesafioMas4 { get; set; }
         public bool FaltaUnoPendiente { get; set; }
+        public int IndiceSinUno { get; set; }        // quién no dijo UNO (-1 = nadie); no puede señalarse a sí mismo
         public string Error { get; set; }            // jugada rechazada, solo para el cliente
 
         public EstadoRed()
         {
             Jugadores = new List<JugadorRed>();
             Tuyos = new List<int>();
+            IndiceSinUno = -1;
         }
     }
 
-    // Mensajes cliente -> anfitrión: "Jugar", "Robar", "Pasar", "FaltaUno", "ColorInicial", "Mas4".
+    // Mensajes cliente -> servidor: selección de jugador y acciones de juego.
     // Solo se llenan los campos que cada acción necesita.
     public class AccionRed
     {
