@@ -102,7 +102,7 @@ using System.Windows.Forms;
   - Solo el anfitrión valida jugadas y guarda el log en la BD.
   - Conexion.cs manda/recibe; EstadoRed.cs define los datos; FormRed.cs conecta.
 */
- 
+
 
 namespace uno
 {
@@ -342,8 +342,8 @@ namespace uno
         //Inicio de la partida (Local y Host: quien tiene el Juego)
         private void IniciarPartida(List<JugadorBD> jugadores)
         {
-            if (modo == Modo.Host && (conexiones.Count < 1 || conexiones.Count >= jugadores.Count))
-                throw new ArgumentException("Se necesita al menos 1 cliente y menos clientes que jugadores.");
+            if (modo == Modo.Host && (jugadores.Count != 4 || conexiones.Count != 4))
+                throw new ArgumentException("El servidor necesita exactamente cuatro jugadores y cuatro clientes conectados.");
 
             List<string> nombres = new List<string>();
             for (int i = 0; i < jugadores.Count; i++)
@@ -362,21 +362,15 @@ namespace uno
             if (!registrador.Iniciar())
                 AvisarErrorBD(registrador.UltimoError);
 
-            // Reparto de asientos entre las computadoras: el asiento i es de la computadora
-            // (i % total). La 0 es el anfitrión; la 1, el primer cliente que se conectó, etc.
-            //   2 computadoras: yo 0 y 2; el cliente 1 y 3
-            //   4 computadoras: yo 0; un jugador por cada cliente
-            int equipos = conexiones.Count + 1;
-            for (int c = 0; c < conexiones.Count; c++)
-                asientosDe.Add(new List<int>());
-
-            for (int i = 0; i < juego.Jugadores.Count; i++)
+            // Modo servidor: el servidor no juega. Cada cliente controla exactamente
+            // un asiento, siguiendo el orden en que se conectó y eligió jugador.
+            if (modo == Modo.Host)
             {
-                int equipo = (modo == Modo.Host) ? i % equipos : 0;
-                if (equipo == 0)
-                    misIndices.Add(i);
-                else
-                    asientosDe[equipo - 1].Add(i);
+                for (int c = 0; c < conexiones.Count; c++)
+                    asientosDe.Add(new List<int>());
+
+                for (int i = 0; i < juego.Jugadores.Count; i++)
+                    asientosDe[i].Add(i);
             }
 
             if (modo == Modo.Host)
@@ -639,8 +633,11 @@ namespace uno
             btnUno.Text = decirUno ? "¡UNO! ✓" : "¡UNO!";
             btnUno.Enabled = !e.RondaTerminada && miTurno;
             btnPasar.Enabled = !e.RondaTerminada && miTurno;
-            btnFaltaUno.Enabled = e.FaltaUnoPendiente;
-            btnSiguienteRonda.Enabled = e.RondaTerminada && !e.PartidaTerminada && modo != Modo.Cliente;
+            // El jugador que no dijo UNO no puede señalar su propia falta (en Local, todos
+            // comparten la misma computadora, así que ahí el botón sigue disponible).
+            bool esMiFalta = modo == Modo.Cliente && e.IndiceSinUno >= 0 && EsMio(e.IndiceSinUno);
+            btnFaltaUno.Enabled = e.FaltaUnoPendiente && !esMiFalta;
+            btnSiguienteRonda.Enabled = e.RondaTerminada && !e.PartidaTerminada;
         }
 
         private string TextoJugador(JugadorRed jugador)
@@ -861,6 +858,7 @@ namespace uno
             e.GanadorPartida = juego.GanadorPartida == null ? null : juego.GanadorPartida.Nombre;
             e.EsperandoDesafioMas4 = juego.EsperandoDesafioMas4;
             e.FaltaUnoPendiente = juego.FaltaUnoPendiente;
+            e.IndiceSinUno = juego.IndiceSinUno;
             return e;
         }
 
@@ -1003,7 +1001,16 @@ namespace uno
 
         private void ClickSiguienteRonda(object sender, EventArgs e)
         {
-            if (modo == Modo.Cliente) return;   // solo el anfitrión (o el modo Local) la inicia
+            if (estado == null || !estado.RondaTerminada || estado.PartidaTerminada)
+                return;
+
+            // Como el servidor no es jugador, cualquiera de los clientes puede pedir
+            // que empiece la siguiente ronda. El servidor sigue ejecutando las reglas.
+            if (modo == Modo.Cliente)
+            {
+                EnviarAccion("SiguienteRonda", 0, null, false, false);
+                return;
+            }
 
             Intentar(() => juego.IniciarRonda());
             decirUno = false;
@@ -1158,6 +1165,11 @@ namespace uno
             {
                 errorCliente = "No es tu turno.";
             }
+            // El servidor también lo valida: quien no dijo UNO no puede señalarse a sí mismo
+            else if (m.Tipo == "FaltaUno" && juego.FaltaUnoPendiente && asientosDe[c].Contains(juego.IndiceSinUno))
+            {
+                errorCliente = "No puedes señalar tu propia falta de UNO.";
+            }
             else
             {
                 switch (m.Tipo)
@@ -1168,6 +1180,10 @@ namespace uno
                     case "FaltaUno": EjecutarFaltaUno(); break;
                     case "ColorInicial": EjecutarColorInicial(a.Color); break;
                     case "Mas4": EjecutarMas4(a.Desafiar); break;
+                    case "SiguienteRonda":
+                        if (juego.RondaTerminada && !juego.PartidaTerminada)
+                            Intentar(() => juego.IniciarRonda());
+                        break;
                     default: return;
                 }
             }
