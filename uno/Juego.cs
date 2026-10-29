@@ -60,6 +60,7 @@ namespace uno
         public bool EsperandoDesafioMas4 { get { return jugadorMas4 >= 0; } }
         public bool FaltaUnoPendiente { get { return jugadorSinUno >= 0; } }
 
+        public int IndiceSinUno { get { return jugadorSinUno; } }
         public event Action<MovimientoJuego> MovimientoRealizado;
         public event Action PartidaFinalizada;
 
