@@ -15,12 +15,12 @@ namespace uno
         private readonly List<TarjetaJugador> tarjetas = new List<TarjetaJugador>();
         private readonly List<TarjetaJugador> elegidas = new List<TarjetaJugador>();
 
-        // Aviso de error de conexión 
+        // Aviso de error de conexión
         private Label lblErrorTitulo;
         private Label lblErrorDetalle;
         private BotonPastel btnReintentar;
 
-        // Botones creados por código (esquina superior derecha): registrar jugador y partida en red
+        // Botones creados por código
         private BotonPastel btnRegistrar;
         private BotonPastel btnCrearRed;
         private BotonPastel btnUnirse;
@@ -44,33 +44,54 @@ namespace uno
         {
             var g = e.Graphics;
             var rect = ClientRectangle;
-            if (rect.Width < 2 || rect.Height < 2) { base.OnPaintBackground(e); return; }
+
+            if (rect.Width < 2 || rect.Height < 2)
+            {
+                base.OnPaintBackground(e);
+                return;
+            }
 
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            using (var fondo = new LinearGradientBrush(rect, Color.White, Color.White, 55f))
+            using (var fondo = new LinearGradientBrush(
+                rect, Color.White, Color.White, 55f))
             {
                 fondo.InterpolationColors = new ColorBlend
                 {
                     Positions = new[] { 0f, 0.5f, 1f },
                     Colors = new[]
                     {
-                        Color.FromArgb(240, 230, 255),   // lavanda
-                        Color.FromArgb(255, 232, 242),   // rosa
-                        Color.FromArgb(255, 241, 220)    // durazno
+                        Color.FromArgb(240, 230, 255),
+                        Color.FromArgb(255, 232, 242),
+                        Color.FromArgb(255, 241, 220)
                     }
                 };
+
                 g.FillRectangle(fondo, rect);
             }
 
-            float w = rect.Width, h = rect.Height;
-            DibujarCirculo(g, -0.10f * w, -0.20f * h, 0.42f * w, Color.FromArgb(90, Tema.Rosa));
-            DibujarCirculo(g, 0.78f * w, 0.55f * h, 0.40f * w, Color.FromArgb(80, Tema.Azul));
-            DibujarCirculo(g, 0.30f * w, 0.78f * h, 0.22f * w, Color.FromArgb(70, Tema.Amarillo));
-            DibujarCirculo(g, 0.86f * w, -0.12f * h, 0.20f * w, Color.FromArgb(70, Tema.MoradoPastel));
+            float w = rect.Width;
+            float h = rect.Height;
+
+            DibujarCirculo(
+                g, -0.10f * w, -0.20f * h, 0.42f * w,
+                Color.FromArgb(90, Tema.Rosa));
+
+            DibujarCirculo(
+                g, 0.78f * w, 0.55f * h, 0.40f * w,
+                Color.FromArgb(80, Tema.Azul));
+
+            DibujarCirculo(
+                g, 0.30f * w, 0.78f * h, 0.22f * w,
+                Color.FromArgb(70, Tema.Amarillo));
+
+            DibujarCirculo(
+                g, 0.86f * w, -0.12f * h, 0.20f * w,
+                Color.FromArgb(70, Tema.MoradoPastel));
         }
 
-        private static void DibujarCirculo(Graphics g, float x, float y, float d, Color color)
+        private static void DibujarCirculo(
+            Graphics g, float x, float y, float d, Color color)
         {
             using (var b = new SolidBrush(color))
                 g.FillEllipse(b, x, y, d, d);
@@ -81,43 +102,59 @@ namespace uno
             Close();
         }
 
-        // ---------- Acciones adicionales: dos columnas, sin superposiciones ----------
+        // ---------- Botones adicionales ----------
         private void CrearBotonesExtra()
         {
-            if (btnRegistrar != null) return;
+            if (btnRegistrar != null)
+                return;
 
-            // Reservamos espacio real para los botones, en vez de ponerlos
-            // sobre el panel de jugadores.
             ClientSize = new Size(1100, 760);
             panelJugadores.SetBounds(540, 20, 520, 710);
 
-            // Acciones generales en la columna izquierda.
-            btnRegistrar = CrearBotonAccion("+ Registrar jugador",
-                new Rectangle(64, 620, 210, 42), this, 30);
+            btnRegistrar = CrearBotonAccion(
+                "+ Registrar jugador",
+                new Rectangle(64, 620, 210, 42),
+                this,
+                30);
+
             btnRegistrar.Click += btnRegistrar_Click;
 
-            btnUnirse = CrearBotonAccion("Unirme a una partida",
-                new Rectangle(290, 620, 230, 42), this, 31);
+            btnUnirse = CrearBotonAccion(
+                "Unirme a una partida",
+                new Rectangle(290, 620, 230, 42),
+                this,
+                31);
+
             btnUnirse.Click += btnUnirse_Click;
 
-            // La acción de anfitrión pertenece al panel de selección.
-            btnCrearRed = CrearBotonAccion("Crear partida en red",
-                new Rectangle(44, 610, 432, 46), panelJugadores, 32);
-            btnCrearRed.Click += btnCrearRed_Click;
-            btnCrearRed.Enabled = elegidas.Count == Requeridos;
+            btnCrearRed = CrearBotonAccion(
+                "Crear partida en red",
+                new Rectangle(44, 610, 432, 46),
+                panelJugadores,
+                32);
 
-            // Salir tiene su propia fila.
+            btnCrearRed.Click += btnCrearRed_Click;
+
+            // El servidor no necesita seleccionar jugadores.
+            btnCrearRed.Enabled = true;
+
             btnSalir.Location = new Point(64, 690);
         }
 
         private BotonPastel CrearBotonAccion(
-            string texto, Rectangle posicion, Control contenedor, int tabIndex)
+            string texto,
+            Rectangle posicion,
+            Control contenedor,
+            int tabIndex)
         {
             BotonPastel boton = new BotonPastel
             {
                 Text = texto,
-                Font = new Font("Segoe UI Semibold", 10F,
-                    FontStyle.Regular, GraphicsUnit.Point),
+                Font = new Font(
+                    "Segoe UI Semibold",
+                    10F,
+                    FontStyle.Regular,
+                    GraphicsUnit.Point),
                 Location = posicion.Location,
                 Size = posicion.Size,
                 TabIndex = tabIndex,
@@ -127,99 +164,129 @@ namespace uno
 
             contenedor.Controls.Add(boton);
             boton.BringToFront();
+
             return boton;
         }
 
+        // ---------- Registrar jugador ----------
         private void btnRegistrar_Click(object sender, EventArgs e)
         {
             using (FormRegistro registro = new FormRegistro(baseDatos))
             {
                 registro.ShowDialog(this);
+
                 if (registro.SeRegistroAlguno)
                     RecargarConservandoSeleccion();
             }
         }
 
-        // Recarga la lista (para que aparezcan los jugadores nuevos) sin perder a los ya elegidos
         private void RecargarConservandoSeleccion()
         {
-            List<int> ids = elegidas.Select(t => t.Jugador.id).ToList();
+            List<int> ids = elegidas
+                .Select(t => t.Jugador.id)
+                .ToList();
+
             CargarJugadores();
+
             foreach (int id in ids)
             {
-                TarjetaJugador tarjeta = tarjetas.FirstOrDefault(t => t.Jugador.id == id);
-                if (tarjeta != null) elegidas.Add(tarjeta);
+                TarjetaJugador tarjeta =
+                    tarjetas.FirstOrDefault(t => t.Jugador.id == id);
+
+                if (tarjeta != null)
+                    elegidas.Add(tarjeta);
             }
+
             ActualizarSeleccion();
         }
 
-        // Anfitrión: usa los 4 jugadores elegidos, igual que ComenzarPartida
+        // ---------- Crear partida en red ----------
+        // Esta computadora será solamente el servidor.
+        // Los cuatro jugadores serán clientes conectados.
         private void btnCrearRed_Click(object sender, EventArgs e)
         {
-            if (elegidas.Count != Requeridos) return;
-
-            List<JugadorBD> jugadores = new List<JugadorBD>();
-            for (int i = 0; i < elegidas.Count; i++)
-                jugadores.Add(elegidas[i].Jugador);
-
-            using (FormRed red = new FormRed(jugadores))
+            using (FormRed red = new FormRed(true))
             {
                 Hide();
-                red.ShowDialog();
+                red.ShowDialog(this);
             }
+
             Show();
-            CargarJugadores();   // como al terminar una partida local: recarga ganadas/perdidas
+            CargarJugadores();
         }
 
-        // Cliente: no necesita elegir jugadores ni tener la API encendida
+        // ---------- Unirse a una partida ----------
+        // El cliente selecciona un jugador guardado en la base de datos.
         private void btnUnirse_Click(object sender, EventArgs e)
         {
-            using (FormRed red = new FormRed())
+            if (elegidas.Count != 1)
+            {
+                MessageBox.Show(
+                    "Para unirte a una partida, selecciona exactamente un jugador.",
+                    "UNO - Unirse a una partida",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+
+                return;
+            }
+
+            JugadorBD jugador = elegidas[0].Jugador;
+
+            using (FormRed red = new FormRed(jugador))
             {
                 Hide();
-                red.ShowDialog();
+                red.ShowDialog(this);
             }
+
             Show();
+            CargarJugadores();
         }
 
+        // ---------- Partida local ----------
         private void btnComenzar_Click(object sender, EventArgs e)
         {
             ComenzarPartida();
         }
 
-        // Enter también comienza la partida 
-        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        protected override bool ProcessCmdKey(
+            ref Message msg, Keys keyData)
         {
             if (keyData == Keys.Enter && btnComenzar.Enabled)
             {
                 ComenzarPartida();
                 return true;
             }
+
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
         private void ComenzarPartida()
         {
-            if (elegidas.Count != Requeridos) return;
+            if (elegidas.Count != Requeridos)
+                return;
 
-            // Jugadores en el orden en que se eligieron
             List<JugadorBD> jugadores = new List<JugadorBD>();
+
             for (int i = 0; i < elegidas.Count; i++)
                 jugadores.Add(elegidas[i].Jugador);
 
             FormJuego pantalla;
+
             try
             {
                 pantalla = new FormJuego(jugadores);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("No se pudo crear la partida.\n\n" + ex.Message,
-                    "UNO", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(
+                    "No se pudo crear la partida.\n\n" + ex.Message,
+                    "UNO",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+
                 return;
             }
 
-            // Al cerrar el juego, regresa al inicio y recarga las ganadas/perdidas
             pantalla.FormClosed += (s, a) =>
             {
                 Show();
@@ -230,6 +297,7 @@ namespace uno
             Hide();
         }
 
+        // ---------- Cargar jugadores ----------
         private void CargarJugadores()
         {
             List<JugadorBD> jugadores;
@@ -251,20 +319,37 @@ namespace uno
             OcultarError();
             LimpiarTarjetas();
 
-            if (jugadores.Count == 0) { ActualizarSeleccion(); return; }
+            if (jugadores.Count == 0)
+            {
+                ActualizarSeleccion();
+                return;
+            }
 
             int x = lblElige.Left;
             int ancho = lblElige.Width;
-            int yInicio = lblIndicacion.Bottom + (int)(lblElige.Height * 0.25);
+
+            int yInicio =
+                lblIndicacion.Bottom + (int)(lblElige.Height * 0.25);
+
             int separacion = (int)(lblElige.Height * 0.30);
-            int disponible = lblContador.Top - yInicio - (int)(lblElige.Height * 0.20);
+
+            int disponible =
+                lblContador.Top - yInicio -
+                (int)(lblElige.Height * 0.20);
+
             int altoMaximo = (int)(lblElige.Height * 1.85);
-            int alto = Math.Min(altoMaximo, (disponible - separacion * (jugadores.Count - 1)) / jugadores.Count);
+
+            int alto = Math.Min(
+                altoMaximo,
+                (disponible - separacion * (jugadores.Count - 1))
+                    / jugadores.Count);
 
             for (int i = 0; i < jugadores.Count; i++)
             {
                 var jug = jugadores[i];
-                var est = estadisticas.FirstOrDefault(s => s.nombre == jug.nombre);
+
+                var est = estadisticas.FirstOrDefault(
+                    s => s.nombre == jug.nombre);
 
                 var tarjeta = new TarjetaJugador
                 {
@@ -272,10 +357,12 @@ namespace uno
                     Nombre = jug.nombre,
                     Record = TextoRecord(est),
                     Acento = Tema.Acentos[i % Tema.Acentos.Length],
-                    Location = new Point(x, yInicio + i * (alto + separacion)),
+                    Location = new Point(
+                        x, yInicio + i * (alto + separacion)),
                     Size = new Size(ancho, alto),
                     TabIndex = 10 + i
                 };
+
                 tarjeta.Click += Tarjeta_Click;
 
                 tarjetas.Add(tarjeta);
@@ -284,6 +371,7 @@ namespace uno
 
             ActualizarSeleccion();
         }
+
         private void LimpiarTarjetas()
         {
             foreach (var t in tarjetas)
@@ -291,6 +379,7 @@ namespace uno
                 panelJugadores.Controls.Remove(t);
                 t.Dispose();
             }
+
             tarjetas.Clear();
             elegidas.Clear();
         }
@@ -300,20 +389,32 @@ namespace uno
             if (est == null || est.partidas_jugadas == 0)
                 return "Aún sin partidas";
 
-            string ganadas = est.partidas_ganadas + (est.partidas_ganadas == 1 ? " ganada" : " ganadas");
-            string perdidas = est.partidas_perdidas + (est.partidas_perdidas == 1 ? " perdida" : " perdidas");
+            string ganadas =
+                est.partidas_ganadas +
+                (est.partidas_ganadas == 1 ? " ganada" : " ganadas");
+
+            string perdidas =
+                est.partidas_perdidas +
+                (est.partidas_perdidas == 1 ? " perdida" : " perdidas");
+
             return ganadas + "  ·  " + perdidas;
         }
 
+        // ---------- Mostrar errores de conexión ----------
         private void CrearControlesError()
         {
-            if (lblErrorTitulo != null) return;
+            if (lblErrorTitulo != null)
+                return;
 
             lblErrorTitulo = new Label
             {
                 AutoSize = false,
                 BackColor = Color.Transparent,
-                Font = new Font("Segoe UI Semibold", 16F, FontStyle.Regular, GraphicsUnit.Point),
+                Font = new Font(
+                    "Segoe UI Semibold",
+                    16F,
+                    FontStyle.Regular,
+                    GraphicsUnit.Point),
                 ForeColor = Tema.Texto,
                 Text = "No hay conexión con el juego",
                 TextAlign = ContentAlignment.MiddleLeft
@@ -323,7 +424,11 @@ namespace uno
             {
                 AutoSize = false,
                 BackColor = Color.Transparent,
-                Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point),
+                Font = new Font(
+                    "Segoe UI",
+                    10F,
+                    FontStyle.Regular,
+                    GraphicsUnit.Point),
                 ForeColor = Tema.Suave,
                 TextAlign = ContentAlignment.TopLeft
             };
@@ -331,9 +436,14 @@ namespace uno
             btnReintentar = new BotonPastel
             {
                 Text = "Reintentar",
-                Font = new Font("Segoe UI Semibold", 12F, FontStyle.Regular, GraphicsUnit.Point),
+                Font = new Font(
+                    "Segoe UI Semibold",
+                    12F,
+                    FontStyle.Regular,
+                    GraphicsUnit.Point),
                 TabIndex = 20
             };
+
             btnReintentar.Click += btnReintentar_Click;
 
             panelJugadores.Controls.Add(lblErrorTitulo);
@@ -350,16 +460,24 @@ namespace uno
             int ancho = lblElige.Width;
             int y = lblIndicacion.Bottom + unidad;
 
-            lblErrorTitulo.SetBounds(x, y, ancho, (int)(unidad * 1.2));
+            lblErrorTitulo.SetBounds(
+                x, y, ancho, (int)(unidad * 1.2));
+
             y = lblErrorTitulo.Bottom + (int)(unidad * 0.3);
 
             lblErrorDetalle.Text =
                 "No se pudo cargar la lista de jugadores.\r\n\r\n" +
                 "Revisa que MySQL esté encendido y que la API esté corriendo.\r\n\r\n" +
                 "Detalle: " + Recortar(detalle, 140);
-            lblErrorDetalle.SetBounds(x, y, ancho, (int)(unidad * 5.5));
 
-            btnReintentar.SetBounds(x, lblErrorDetalle.Bottom + (int)(unidad * 0.4), ancho, (int)(unidad * 1.3));
+            lblErrorDetalle.SetBounds(
+                x, y, ancho, (int)(unidad * 5.5));
+
+            btnReintentar.SetBounds(
+                x,
+                lblErrorDetalle.Bottom + (int)(unidad * 0.4),
+                ancho,
+                (int)(unidad * 1.3));
 
             lblErrorTitulo.Visible = true;
             lblErrorDetalle.Visible = true;
@@ -375,31 +493,49 @@ namespace uno
                 lblErrorDetalle.Visible = false;
                 btnReintentar.Visible = false;
             }
+
             lblContador.Visible = true;
         }
 
         private void btnReintentar_Click(object sender, EventArgs e)
         {
             UseWaitCursor = true;
-            try { CargarJugadores(); }
-            finally { UseWaitCursor = false; }
+
+            try
+            {
+                CargarJugadores();
+            }
+            finally
+            {
+                UseWaitCursor = false;
+            }
         }
 
         private static string Recortar(string texto, int max)
         {
-            if (string.IsNullOrEmpty(texto)) return "(sin detalle)";
+            if (string.IsNullOrEmpty(texto))
+                return "(sin detalle)";
+
             texto = texto.Replace("\r", " ").Replace("\n", " ");
-            return texto.Length <= max ? texto : texto.Substring(0, max) + "…";
+
+            return texto.Length <= max
+                ? texto
+                : texto.Substring(0, max) + "…";
         }
 
+        // ---------- Selección de jugadores ----------
         private void Tarjeta_Click(object sender, EventArgs e)
         {
             var tarjeta = (TarjetaJugador)sender;
 
             if (elegidas.Contains(tarjeta))
+            {
                 elegidas.Remove(tarjeta);
+            }
             else if (elegidas.Count < Requeridos)
+            {
                 elegidas.Add(tarjeta);
+            }
 
             ActualizarSeleccion();
         }
@@ -411,11 +547,15 @@ namespace uno
             foreach (var t in tarjetas)
             {
                 t.Turno = elegidas.IndexOf(t) + 1;
-                t.Enabled = !completo || t.Elegida;    // con 4 elegidos, las demás se bloquean
+                t.Enabled = !completo || t.Elegida;
             }
 
+            // La partida local necesita cuatro jugadores.
             btnComenzar.Enabled = completo;
-            if (btnCrearRed != null) btnCrearRed.Enabled = completo;
+
+            // El servidor no necesita seleccionar jugadores.
+            if (btnCrearRed != null)
+                btnCrearRed.Enabled = true;
 
             if (completo)
             {
@@ -430,8 +570,11 @@ namespace uno
             else
             {
                 int faltan = Requeridos - elegidas.Count;
-                lblContador.Text = elegidas.Count + " de " + Requeridos + "  ·  " +
-                                   (faltan == 1 ? "falta 1" : "faltan " + faltan);
+
+                lblContador.Text =
+                    elegidas.Count + " de " + Requeridos + "  ·  " +
+                    (faltan == 1 ? "falta 1" : "faltan " + faltan);
+
                 lblContador.ForeColor = Tema.Suave;
             }
         }
