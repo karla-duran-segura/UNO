@@ -59,6 +59,8 @@ namespace uno
         public JugadorUno GanadorPartida { get; private set; }
         public bool EsperandoDesafioMas4 { get { return jugadorMas4 >= 0; } }
         public bool FaltaUnoPendiente { get { return jugadorSinUno >= 0; } }
+        // Índice del jugador que no dijo UNO (-1 si no hay falta pendiente)
+        public int IndiceSinUno { get { return jugadorSinUno; } }
 
         public int IndiceSinUno { get { return jugadorSinUno; } }
         public event Action<MovimientoJuego> MovimientoRealizado;

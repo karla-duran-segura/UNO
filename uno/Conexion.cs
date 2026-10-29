@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
@@ -26,8 +27,27 @@ namespace uno
         private readonly StreamReader lector;
         private readonly StreamWriter escritor;
         private bool cerrada;
+        private bool iniciado;
 
-        public event Action<Mensaje> MensajeRecibido;
+        // Mensajes que llegaron cuando nadie estaba suscrito (por ejemplo, mientras se
+        // pasa de la sala de espera a FormJuego). Se entregan al suscribirse el siguiente.
+        // Todo ocurre en el hilo de la interfaz, así que no hace falta lock.
+        private Action<Mensaje> manejadores;
+        private readonly Queue<Mensaje> pendientes = new Queue<Mensaje>();
+
+        public event Action<Mensaje> MensajeRecibido
+        {
+            add
+            {
+                manejadores += value;
+                EntregarPendientes();
+            }
+            remove
+            {
+                manejadores -= value;
+            }
+        }
+
         public event Action Desconectado;
 
         public Conexion(TcpClient tcp)
@@ -59,9 +79,30 @@ namespace uno
             catch (ObjectDisposedException) { }
         }
 
+        private void EntregarPendientes()
+        {
+            while (manejadores != null && pendientes.Count > 0)
+                Despachar(pendientes.Dequeue());
+        }
+
+        private void Despachar(Mensaje m)
+        {
+            try { manejadores(m); }
+            catch (Exception ex)
+            {
+                // Un error al procesar un mensaje no debe tumbar la conexión.
+                System.Diagnostics.Debug.WriteLine("Error al procesar '" + m.Tipo + "': " + ex);
+            }
+        }
+
         // Empieza a escuchar. Termina (y dispara Desconectado) cuando se cierra la conexión.
         public async void Iniciar()
         {
+            // Permite transferir la misma conexión de la sala de espera a FormJuego
+            // sin iniciar dos lectores simultáneos sobre el mismo StreamReader.
+            if (iniciado || cerrada) return;
+            iniciado = true;
+
             try
             {
                 string linea;
@@ -72,16 +113,9 @@ namespace uno
                     catch (JsonException) { }
                     if (m == null) continue;
 
-                    Action<Mensaje> manejador = MensajeRecibido;
-                    if (manejador != null)
-                    {
-                        try { manejador(m); }
-                        catch (Exception ex)
-                        {
-                            // Un error al procesar un mensaje no debe tumbar la conexión.
-                            System.Diagnostics.Debug.WriteLine("Error al procesar '" + m.Tipo + "': " + ex);
-                        }
-                    }
+                    // Si nadie escucha en este momento, se guarda para no perderlo.
+                    if (manejadores == null) pendientes.Enqueue(m);
+                    else Despachar(m);
                 }
             }
             catch (IOException) { }
