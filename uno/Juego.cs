@@ -384,7 +384,7 @@ namespace uno
                 .SelectMany(j => j.Mano).Sum(ValorCarta);
             Jugadores[ganador].Puntos += puntos;
             Registrar(Jugadores[ganador].Nombre + " gana la ronda y obtiene " + puntos + " puntos.");
-            if (Jugadores[ganador].Puntos >= 500)
+            if (Jugadores[ganador].Puntos >= 50)
             {
                 PartidaTerminada = true;
                 GanadorPartida = Jugadores[ganador];
