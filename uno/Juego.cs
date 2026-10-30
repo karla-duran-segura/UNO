@@ -62,7 +62,7 @@ namespace uno
         // Índice del jugador que no dijo UNO (-1 si no hay falta pendiente)
         public int IndiceSinUno { get { return jugadorSinUno; } }
 
-        public int IndiceSinUno { get { return jugadorSinUno; } }
+        // public int IndiceSinUno { get { return jugadorSinUno; } }
         public event Action<MovimientoJuego> MovimientoRealizado;
         public event Action PartidaFinalizada;
 
